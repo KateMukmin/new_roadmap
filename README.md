@@ -29,14 +29,16 @@ to these two variables.
 cp .env.example .env
 ```
 
-## 3. Create the database tables
+## 3. Create the database tables (only needed for local dev)
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma migrate deploy
 ```
 
-This reads `prisma/schema.prisma` and creates the `Setting`, `Theme`, `Item`,
-and `ThemeItem` tables in your database.
+This applies the migration already included in `prisma/migrations/` to your
+database, creating the `Setting`, `Theme`, `Item`, and `ThemeItem` tables.
+You only need to run this yourself for local development, on Vercel this
+happens automatically (see step 6).
 
 ## 4. Run it locally
 
@@ -73,18 +75,10 @@ locally too; leave it blank/unset locally and the site stays open.
 3. In the Vercel project settings, make sure the Prisma Postgres integration
    is attached (this sets the `DATABASE_URL` / `DIRECT_URL` env vars in
    production automatically).
-4. Deploy. Vercel runs `npm run build`, which runs `prisma generate` via the
-   `postinstall` script.
-
-If this is a brand-new production database, run the migration against it once
-(Vercel won't do this for you automatically):
-
-```bash
-npx prisma migrate deploy
-```
-
-You can run that from your machine with `DATABASE_URL`/`DIRECT_URL` pointed
-at the production database, or via `vercel env pull` first to grab them.
+4. Deploy. The `build` script runs `prisma migrate deploy` before building
+   the app, so the database tables get created (or updated) automatically
+   on every deploy, using whatever migrations exist in `prisma/migrations/`.
+   You never need to run a migration by hand for a normal deploy.
 
 ## Bringing over your test data
 
@@ -97,6 +91,15 @@ running app once it's deployed. If you'd rather script the import, the JSON
 shape is: `{ title, themes: [{name, color}], items: [{title, description,
 status, when, themeIds: [themeName,...]}] }` — happy to write a one-off
 import script if you want to hand me that export file.
+
+## Making future schema changes
+
+If the data model ever changes (a new field, a new table), that needs a new
+migration file added to `prisma/migrations/`, generated with
+`npx prisma migrate dev --name <something>` against a database you're okay
+running it against (or ask me to do this for you). Once that migration is
+committed and pushed, the next Vercel deploy applies it automatically, same
+as the initial one.
 
 ## How the data is modeled
 
