@@ -24,6 +24,7 @@ const SORT_OPTIONS = [
 
 const VIEW_OPTIONS = [
   { id: 'roadmap', label: 'Roadmap' },
+  { id: 'all', label: 'All features' },
   { id: 'gantt', label: 'Gantt' },
   { id: 'byTheme', label: 'By theme' },
   { id: 'byDate', label: 'By date' },
@@ -339,6 +340,29 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
             {view === 'byTheme' && <ThemePieView items={items} themes={themes} itemsForTheme={itemsForTheme} />}
             {view === 'byDate' && <DatePieView items={items} />}
 
+            {(view === 'roadmap' || view === 'all') && (
+              <div className="sort-bar">
+                <span>Sort by</span>
+                {SORT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
+                    onClick={() => setSortMode(opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {view === 'all' && (
+              <AllItemsBlock
+                items={withOtherThemeNames(getSortedItems(items, sortMode), null)}
+                present={present}
+                onEditItem={openEditItemModal}
+              />
+            )}
+
             {view === 'roadmap' && (
               <>
                 <div className="tabs-wrap">
@@ -362,19 +386,6 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                       <span className="tab-count">{untaggedItems.length}</span>
                     </button>
                   )}
-                </div>
-
-                <div className="sort-bar">
-                  <span>Sort by</span>
-                  {SORT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
-                      onClick={() => setSortMode(opt.id)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
                 </div>
 
                 {showingUntagged ? (
@@ -588,6 +599,24 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
 
       {!present && (
         <button className="add-item-row" onClick={onAddItem}>+ Add item to {theme.name}</button>
+      )}
+    </div>
+  );
+}
+
+function AllItemsBlock({ items, present, onEditItem }) {
+  return (
+    <div className="theme-block">
+      <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
+        <h2>All features</h2>
+        <span className="count">{items.length} item{items.length === 1 ? '' : 's'}</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="empty-state"><h2>Nothing here yet</h2><p>Add some items first.</p></div>
+      ) : (
+        items.map((item) => (
+          <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} reorder={null} />
+        ))
       )}
     </div>
   );
