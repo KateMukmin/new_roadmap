@@ -38,6 +38,7 @@ model Item {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   themes      ThemeItem[]
+  phases      Phase[]
 }
 
 // Join table: lets one item belong to several themes, and tracks the
@@ -53,5 +54,20 @@ model ThemeItem {
 
   @@unique([themeId, itemId])
   @@index([themeId])
+  @@index([itemId])
+}
+
+// A feature broken into steps with their own target dates (e.g. "Drug
+// Testing" split into Phase 1 / Phase 2 / Billing), without giving each
+// step its own status, it's still one item on the roadmap.
+model Phase {
+  id       String  @id @default(cuid())
+  itemId   String
+  label    String
+  when     String?
+  position Int     @default(0)
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
   @@index([itemId])
 }

@@ -103,11 +103,29 @@ as the initial one.
 
 ## How the data is modeled
 
+- **Setting** — the roadmap's title (singleton row).
 - **Theme** — a tag/section (name, color, position for tab order).
 - **Item** — a roadmap entry (title, description, status, target date).
 - **ThemeItem** — the join table connecting items to themes; it also stores
   a `position` so each theme can have its own manual item order (used when
   sorting by Status).
+- **Phase** — an optional step within one item (label, its own target date,
+  position), for a feature that's really several dated steps under one
+  status (e.g. "Drug Testing" split into Phase 1/2/3 + Billing).
+
+## Views
+
+Besides the themed roadmap list, there's a view switcher for:
+- **Gantt** — a timeline: each dated item (or each of its phases) plotted
+  against a quarter axis. Items with no date aren't shown, since there's
+  nothing to plot.
+- **By theme** — a pie chart of item counts per theme (an item tagged to
+  several themes counts toward each).
+- **By date** — a pie chart grouping items by target-date quarter, with
+  "No target date" as its own slice.
+
+These use `chart.js` (an npm dependency, already in `package.json`) for the
+pie charts, and a hand-built SVG for the Gantt/timeline.
 
 ## Project structure
 

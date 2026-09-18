@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createItem,
@@ -13,12 +13,19 @@ import {
   updateItem,
   updateTitle,
 } from '@/lib/actions';
-import { STATUS_LABEL, getSortedItems, themePosition } from '@/lib/roadmapUtils';
+import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS } from '@/lib/roadmapUtils';
 
 const SORT_OPTIONS = [
   { id: 'status', label: 'Status' },
   { id: 'title', label: 'Feature title' },
   { id: 'date', label: 'Delivery date' },
+];
+
+const VIEW_OPTIONS = [
+  { id: 'roadmap', label: 'Roadmap' },
+  { id: 'gantt', label: 'Gantt' },
+  { id: 'byTheme', label: 'By theme' },
+  { id: 'byDate', label: 'By date' },
 ];
 
 export default function RoadmapApp({ initialTitle, initialThemes, initialItems }) {
@@ -39,6 +46,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   // Purely local UI state, not persisted, so it survives a refresh but
   // resets to defaults ("Status" sort) on a fresh page load.
   const [present, setPresent] = useState(false);
+  const [view, setView] = useState('roadmap');
   const [activeTab, setActiveTab] = useState(null);
   const [sortMode, setSortMode] = useState('status');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -46,7 +54,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // null = "add" mode
-  const [itemForm, setItemForm] = useState({ title: '', description: '', status: 'now', when: '', themeIds: [] });
+  const [itemForm, setItemForm] = useState({ title: '', description: '', status: 'now', when: '', themeIds: [], phases: [] });
 
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [themeNameInput, setThemeNameInput] = useState('');
@@ -110,7 +118,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
   function openAddItemModal(defaultThemeId) {
     setEditingItem(null);
-    setItemForm({ title: '', description: '', status: 'now', when: '', themeIds: defaultThemeId ? [defaultThemeId] : [] });
+    setItemForm({ title: '', description: '', status: 'now', when: '', themeIds: defaultThemeId ? [defaultThemeId] : [], phases: [] });
     setItemModalOpen(true);
   }
 
@@ -122,6 +130,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
       status: item.status,
       when: item.when || '',
       themeIds: item.themeLinks.map((l) => l.themeId),
+      phases: (item.phases || []).map((p) => ({ label: p.label, when: p.when })),
     });
     setItemModalOpen(true);
   }
@@ -208,6 +217,22 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
     });
   }
 
+  function addPhaseRow() {
+    setItemForm((prev) => ({ ...prev, phases: [...prev.phases, { label: '', when: '' }] }));
+  }
+
+  function updatePhaseRow(index, field, value) {
+    setItemForm((prev) => {
+      const phases = prev.phases.slice();
+      phases[index] = { ...phases[index], [field]: value };
+      return { ...prev, phases };
+    });
+  }
+
+  function removePhaseRow(index) {
+    setItemForm((prev) => ({ ...prev, phases: prev.phases.filter((_, i) => i !== index) }));
+  }
+
   const activeTheme = themes.find((t) => t.id === activeTab) || null;
   const showingUntagged = activeTab === 'untagged';
 
@@ -251,59 +276,79 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
           </div>
         ) : (
           <>
-            <div className="tabs-wrap">
-              {themes.map((theme) => (
-                <button
-                  key={theme.id}
-                  className={`tab-btn${activeTab === theme.id ? ' active' : ''}`}
-                  style={{ '--tab-accent': `var(--${theme.color})`, '--tab-accent-tint': `var(--${theme.color}-tint)` }}
-                  onClick={() => setActiveTab(theme.id)}
-                >
-                  <span>{theme.name}</span>
-                  <span className="tab-count">{itemsForTheme(theme.id).length}</span>
-                </button>
-              ))}
-              {untaggedItems.length > 0 && (
-                <button
-                  className={`tab-btn${activeTab === 'untagged' ? ' active' : ''}`}
-                  onClick={() => setActiveTab('untagged')}
-                >
-                  <span>Untagged</span>
-                  <span className="tab-count">{untaggedItems.length}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="sort-bar">
-              <span>Sort by</span>
-              {SORT_OPTIONS.map((opt) => (
+            <div className="view-bar">
+              {VIEW_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
-                  className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
-                  onClick={() => setSortMode(opt.id)}
+                  className={`view-btn${view === opt.id ? ' active' : ''}`}
+                  onClick={() => setView(opt.id)}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
 
-            {showingUntagged ? (
-              <UntaggedBlock items={withOtherThemeNames(getSortedItems(untaggedItems, sortMode), null)} onEdit={openEditItemModal} />
-            ) : activeTheme ? (
-              <ThemeBlock
-                theme={activeTheme}
-                items={withOtherThemeNames(getSortedItems(itemsForTheme(activeTheme.id), sortMode), activeTheme.id)}
-                present={present}
-                sortMode={sortMode}
-                editing={editingThemeId === activeTheme.id}
-                onStartRename={() => !present && setEditingThemeId(activeTheme.id)}
-                onCommitRename={(name) => handleRenameTheme(activeTheme, name)}
-                onDelete={() => handleDeleteTheme(activeTheme)}
-                onAddItem={() => openAddItemModal(activeTheme.id)}
-                onEditItem={openEditItemModal}
-                onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
-              />
-            ) : null}
+            {view === 'gantt' && <GanttView items={items} themes={themes} />}
+            {view === 'byTheme' && <ThemePieView items={items} themes={themes} itemsForTheme={itemsForTheme} />}
+            {view === 'byDate' && <DatePieView items={items} />}
+
+            {view === 'roadmap' && (
+              <>
+                <div className="tabs-wrap">
+                  {themes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      className={`tab-btn${activeTab === theme.id ? ' active' : ''}`}
+                      style={{ '--tab-accent': `var(--${theme.color})`, '--tab-accent-tint': `var(--${theme.color}-tint)` }}
+                      onClick={() => setActiveTab(theme.id)}
+                    >
+                      <span>{theme.name}</span>
+                      <span className="tab-count">{itemsForTheme(theme.id).length}</span>
+                    </button>
+                  ))}
+                  {untaggedItems.length > 0 && (
+                    <button
+                      className={`tab-btn${activeTab === 'untagged' ? ' active' : ''}`}
+                      onClick={() => setActiveTab('untagged')}
+                    >
+                      <span>Untagged</span>
+                      <span className="tab-count">{untaggedItems.length}</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="sort-bar">
+                  <span>Sort by</span>
+                  {SORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
+                      onClick={() => setSortMode(opt.id)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {showingUntagged ? (
+                  <UntaggedBlock items={withOtherThemeNames(getSortedItems(untaggedItems, sortMode), null)} onEdit={openEditItemModal} />
+                ) : activeTheme ? (
+                  <ThemeBlock
+                    theme={activeTheme}
+                    items={withOtherThemeNames(getSortedItems(itemsForTheme(activeTheme.id), sortMode), activeTheme.id)}
+                    present={present}
+                    sortMode={sortMode}
+                    editing={editingThemeId === activeTheme.id}
+                    onStartRename={() => !present && setEditingThemeId(activeTheme.id)}
+                    onCommitRename={(name) => handleRenameTheme(activeTheme, name)}
+                    onDelete={() => handleDeleteTheme(activeTheme)}
+                    onAddItem={() => openAddItemModal(activeTheme.id)}
+                    onEditItem={openEditItemModal}
+                    onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
+                  />
+                ) : null}
+              </>
+            )}
           </>
         )}
       </div>
@@ -361,6 +406,29 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                 onChange={(e) => setItemForm({ ...itemForm, when: e.target.value })}
                 placeholder="e.g. Q3 2026"
               />
+            </div>
+            <div className="field">
+              <label>Phases (optional) &mdash; split this into steps with their own dates</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {itemForm.phases.map((p, i) => (
+                  <div className="phase-edit-row" key={i}>
+                    <input
+                      style={{ flex: 2 }}
+                      value={p.label}
+                      onChange={(e) => updatePhaseRow(i, 'label', e.target.value)}
+                      placeholder="Phase name"
+                    />
+                    <input
+                      style={{ flex: 1 }}
+                      value={p.when}
+                      onChange={(e) => updatePhaseRow(i, 'when', e.target.value)}
+                      placeholder="Target date"
+                    />
+                    <button type="button" className="icon-btn" title="Remove phase" onClick={() => removePhaseRow(i)}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="btn" style={{ marginTop: 8 }} onClick={addPhaseRow}>+ Add phase</button>
             </div>
             <div className="modal-actions">
               {editingItem ? <button className="btn ghost" onClick={handleDeleteItem}>Delete</button> : <span />}
@@ -499,6 +567,16 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
       <div className="item-body">
         <div className="item-title">{item.title}</div>
         {item.description && <div className="item-desc">{item.description}</div>}
+        {item.phases && item.phases.length > 0 && (
+          <div className="subitems">
+            {item.phases.map((p) => (
+              <div className="subitem-row" key={p.id}>
+                <span className="label">· {p.label}</span>
+                <span className="when">{p.when}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {item._otherThemeNames && item._otherThemeNames.length > 0 && (
           <div className="item-tags">
             {item._otherThemeNames.map((name) => (
@@ -518,6 +596,222 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
           )}
           <button className="icon-btn" onClick={onEdit} title="Edit">✎</button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ThemePieView({ items, themes, itemsForTheme }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('chart.js/auto').then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+      const labels = [];
+      const data = [];
+      const colors = [];
+      themes.forEach((t) => {
+        const count = itemsForTheme(t.id).length;
+        if (count === 0) return;
+        labels.push(t.name);
+        data.push(count);
+        colors.push(ACCENT_HEX[t.color] || UNTAGGED_HEX);
+      });
+      const untaggedCount = items.filter((i) => i.themeLinks.length === 0).length;
+      if (untaggedCount > 0) { labels.push('Untagged'); data.push(untaggedCount); colors.push(UNTAGGED_HEX); }
+
+      if (chartRef.current) chartRef.current.destroy();
+      const cardColor = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#fff';
+      const textColor = getComputedStyle(document.body).color;
+      chartRef.current = new Chart(canvasRef.current.getContext('2d'), {
+        type: 'pie',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: cardColor, borderWidth: 2 }] },
+        options: { plugins: { legend: { position: 'bottom', labels: { color: textColor, font: { family: 'IBM Plex Sans', size: 12.5 }, padding: 14 } } } },
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, themes]);
+
+  return (
+    <div className="chart-page">
+      <h2>Items by theme</h2>
+      {items.length === 0 ? (
+        <div className="empty-state"><h2>Nothing to chart yet</h2><p>Add some items first.</p></div>
+      ) : (
+        <div className="chart-canvas-wrap"><canvas ref={canvasRef} /></div>
+      )}
+    </div>
+  );
+}
+
+function DatePieView({ items }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('chart.js/auto').then(({ default: Chart }) => {
+      if (cancelled || !canvasRef.current) return;
+
+      const buckets = {};
+      items.forEach((item) => {
+        const label = dateBucketLabel(item.when);
+        buckets[label] = (buckets[label] || 0) + 1;
+      });
+      const entries = Object.keys(buckets).map((k) => ({ label: k, count: buckets[k] }));
+      entries.sort((a, b) => {
+        if (a.label === 'No target date') return 1;
+        if (b.label === 'No target date') return -1;
+        return parseWhenValue(a.label) - parseWhenValue(b.label);
+      });
+
+      const labels = entries.map((e) => e.label);
+      const data = entries.map((e) => e.count);
+      const colors = entries.map((e, i) => (e.label === 'No target date' ? UNTAGGED_HEX : ACCENT_HEX[ACCENTS[i % ACCENTS.length]]));
+
+      if (chartRef.current) chartRef.current.destroy();
+      const cardColor = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#fff';
+      const textColor = getComputedStyle(document.body).color;
+      chartRef.current = new Chart(canvasRef.current.getContext('2d'), {
+        type: 'pie',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: cardColor, borderWidth: 2 }] },
+        options: { plugins: { legend: { position: 'bottom', labels: { color: textColor, font: { family: 'IBM Plex Sans', size: 12.5 }, padding: 14 } } } },
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  return (
+    <div className="chart-page">
+      <h2>Items by target date</h2>
+      {items.length === 0 ? (
+        <div className="empty-state"><h2>Nothing to chart yet</h2><p>Add some items first.</p></div>
+      ) : (
+        <div className="chart-canvas-wrap"><canvas ref={canvasRef} /></div>
+      )}
+    </div>
+  );
+}
+
+function GanttView({ items, themes }) {
+  const rows = [];
+  items.forEach((item) => {
+    const points = [];
+    if (item.phases && item.phases.length) {
+      item.phases.forEach((p) => {
+        const v = parseWhenValue(p.when);
+        if (v !== Infinity) points.push({ label: p.label, when: p.when, value: v });
+      });
+    } else if (item.when) {
+      const v2 = parseWhenValue(item.when);
+      if (v2 !== Infinity) points.push({ label: null, when: item.when, value: v2 });
+    }
+    if (points.length) {
+      points.sort((a, b) => a.value - b.value);
+      rows.push({ item, points });
+    }
+  });
+
+  if (rows.length === 0) {
+    return (
+      <div className="chart-page">
+        <h2>Timeline</h2>
+        <div className="empty-state">
+          <h2>No dated items yet</h2>
+          <p>Add a target date or phase dates to items to see them on a timeline.</p>
+        </div>
+      </div>
+    );
+  }
+
+  rows.sort((a, b) => a.points[0].value - b.points[0].value);
+
+  const allValues = [];
+  rows.forEach((r) => r.points.forEach((p) => allValues.push(p.value)));
+  let minV = Math.min(...allValues);
+  let maxV = Math.max(...allValues);
+  if (minV === maxV) { minV -= 1000 * 60 * 60 * 24 * 30; maxV += 1000 * 60 * 60 * 24 * 30; }
+  let span = maxV - minV;
+  const pad = span * 0.08;
+  minV -= pad; maxV += pad; span = maxV - minV;
+
+  const labelColW = 190;
+  const chartW = 560;
+  const rowH = 34;
+  const topPad = 34;
+  const totalW = labelColW + chartW + 16;
+  const totalH = topPad + rows.length * rowH + 16;
+
+  const xFor = (value) => labelColW + ((value - minV) / span) * chartW;
+
+  const qStartSeed = new Date(minV);
+  let cursor = new Date(qStartSeed.getFullYear(), Math.floor(qStartSeed.getMonth() / 3) * 3, 1).getTime();
+  const ticks = [];
+  let guard = 0;
+  while (cursor <= maxV && guard < 40) {
+    if (cursor >= minV) {
+      const d = new Date(cursor);
+      ticks.push({ value: cursor, label: `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}` });
+    }
+    const dNext = new Date(cursor);
+    cursor = new Date(dNext.getFullYear(), dNext.getMonth() + 3, 1).getTime();
+    guard++;
+  }
+
+  const noDateCount = items.length - rows.length;
+
+  return (
+    <div className="chart-page">
+      <h2>Timeline</h2>
+      <svg viewBox={`0 0 ${totalW} ${totalH}`} width="100%" style={{ display: 'block' }}>
+        {ticks.map((t) => {
+          const x = xFor(t.value);
+          return (
+            <g key={t.value}>
+              <line className="gantt-grid-line" x1={x} x2={x} y1={topPad - 8} y2={totalH - 8} strokeWidth="1" />
+              <text className="gantt-tick-label" x={x} y={topPad - 14} fontSize="11" fontFamily="IBM Plex Sans, sans-serif" textAnchor="middle">{t.label}</text>
+            </g>
+          );
+        })}
+        {rows.map((row, idx) => {
+          const y = topPad + idx * rowH + rowH / 2;
+          const firstThemeId = row.item.themeLinks[0] && row.item.themeLinks[0].themeId;
+          const theme = firstThemeId ? themes.find((t) => t.id === firstThemeId) : null;
+          const color = theme ? (ACCENT_HEX[theme.color] || '#20262B') : '#20262B';
+          const titleText = row.item.title.length > 24 ? row.item.title.slice(0, 23) + '…' : row.item.title;
+          return (
+            <g key={row.item.id}>
+              <text className="gantt-row-label" x={labelColW - 12} y={y + 4} fontSize="13" fontFamily="IBM Plex Sans, sans-serif" textAnchor="end">
+                {titleText}
+                <title>{row.item.title}</title>
+              </text>
+              <line className="gantt-row-line" x1={labelColW} x2={labelColW + chartW} y1={y} y2={y} strokeWidth="1" />
+              {row.points.length > 1 && (
+                <line x1={xFor(row.points[0].value)} x2={xFor(row.points[row.points.length - 1].value)} y1={y} y2={y} stroke={color} strokeWidth="2" />
+              )}
+              {row.points.map((p, pi) => (
+                <circle key={pi} cx={xFor(p.value)} cy={y} r={row.points.length > 1 ? 5 : 6} fill={color}>
+                  <title>{(p.label ? p.label + ' — ' : '') + p.when}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      {noDateCount > 0 && (
+        <p className="chart-note">
+          {noDateCount} item{noDateCount === 1 ? '' : 's'} {noDateCount === 1 ? "isn't" : "aren't"} shown here (no target date set).
+        </p>
       )}
     </div>
   );

@@ -129,6 +129,31 @@ button { font-family: inherit; cursor: pointer; }
 .sort-btn.active { background: var(--border); color: var(--ink); border-color: var(--border-strong); }
 
 .theme-block { margin-bottom: 36px; }
+
+.view-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.view-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.view-btn:hover { color: var(--ink); border-color: var(--ink); }
+.view-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.chart-page h2 { font-family: 'Source Serif 4', Georgia, serif; font-size: 20px; margin: 0 0 20px; }
+.chart-canvas-wrap { max-width: 420px; margin: 0 auto; }
+.chart-note { color: var(--muted); font-size: 13px; margin-top: 16px; }
+
+.phase-edit-row { display: flex; gap: 6px; align-items: center; }
+.phase-edit-row input { width: auto; }
+
+.gantt-grid-line { stroke: var(--border); }
+.gantt-tick-label { fill: var(--muted); }
+.gantt-row-line { stroke: var(--border); }
+.gantt-row-label { fill: var(--ink); }
 .theme-head { display: flex; align-items: baseline; gap: 12px; padding-left: 14px; border-left: 4px solid var(--accent); margin-bottom: 14px; flex-wrap: wrap; }
 .theme-head h2 { font-family: 'Source Serif 4', Georgia, serif; font-weight: 600; font-size: 20px; margin: 0; cursor: text; }
 body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border-radius: 4px; }
@@ -154,6 +179,10 @@ body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border
 .item-body { flex: 1; min-width: 0; }
 .item-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
 .item-desc { color: var(--muted); font-size: 13.5px; line-height: 1.4; margin-bottom: 4px; }
+.subitems { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 2px; }
+.subitem-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.subitem-row .label { color: var(--ink); }
+.subitem-row .when { color: var(--muted); flex-shrink: 0; white-space: nowrap; }
 .item-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .item-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border-strong); padding: 1px 7px; border-radius: 10px; }
 .item-when { flex-shrink: 0; font-size: 12.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
