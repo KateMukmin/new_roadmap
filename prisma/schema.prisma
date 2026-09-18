@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Status {
+  NOW
+  NEXT
+  LATER
+}
+
+// Single row holding roadmap-wide settings (just the title, for now).
+model Setting {
+  id    String @id @default("singleton")
+  title String @default("New Roadmap")
+}
+
+model Theme {
+  id        String      @id @default(cuid())
+  name      String
+  color     String
+  position  Int         @default(0)
+  createdAt DateTime    @default(now())
+  links     ThemeItem[]
+}
+
+model Item {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  status      Status      @default(NOW)
+  when        String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  themes      ThemeItem[]
+}
+
+// Join table: lets one item belong to several themes, and tracks the
+// item's manual drag-order position within each theme separately.
+model ThemeItem {
+  id       String @id @default(cuid())
+  themeId  String
+  itemId   String
+  position Int    @default(0)
+
+  theme Theme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  item  Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([themeId, itemId])
+  @@index([themeId])
+  @@index([itemId])
+}
