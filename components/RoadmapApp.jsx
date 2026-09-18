@@ -7,6 +7,7 @@ import {
   createTheme,
   deleteItem,
   deleteTheme,
+  importRoadmapData,
   renameTheme,
   reorderThemeItems,
   reorderThemes,
@@ -210,6 +211,44 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
     URL.revokeObjectURL(url);
   }
 
+  const importInputRef = useRef(null);
+
+  function handleImportClick() {
+    if (importInputRef.current) importInputRef.current.click();
+  }
+
+  async function handleImportFileChange(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // reset so picking the same file again still fires onChange
+    if (!file) return;
+
+    let parsed;
+    try {
+      const text = await file.text();
+      parsed = JSON.parse(text);
+    } catch (err) {
+      alert("Couldn't read that file, make sure it's the JSON file from an Export.");
+      return;
+    }
+
+    const themeCount = Array.isArray(parsed.themes) ? parsed.themes.length : 0;
+    const itemCount = Array.isArray(parsed.items) ? parsed.items.length : 0;
+    if (!themeCount && !itemCount) {
+      alert("That file doesn't look like a roadmap export, nothing to import.");
+      return;
+    }
+    const proceed = confirm(
+      `Import ${themeCount} theme(s) and ${itemCount} item(s) from "${file.name}"?\n\n` +
+      `This adds them on top of what's already here, it doesn't check for duplicates. ` +
+      `Only import a file once.`
+    );
+    if (!proceed) return;
+
+    const result = await importRoadmapData(parsed);
+    router.refresh();
+    alert(`Imported ${result.themeCount} theme(s) and ${result.itemCount} item(s).`);
+  }
+
   function toggleThemeCheckbox(themeId) {
     setItemForm((prev) => {
       const has = prev.themeIds.includes(themeId);
@@ -256,6 +295,14 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
           </div>
           <div className="mode-toggle">
             {!present && <button className="btn no-present" onClick={handleExport}>Export data</button>}
+            {!present && <button className="btn no-present" onClick={handleImportClick}>Import data</button>}
+            <input
+              type="file"
+              accept="application/json"
+              ref={importInputRef}
+              style={{ display: 'none' }}
+              onChange={handleImportFileChange}
+            />
             {!present && themes.length >= 2 && (
               <button className="btn no-present" onClick={() => setReorderOpen(true)}>Reorder themes</button>
             )}

@@ -80,17 +80,16 @@ locally too; leave it blank/unset locally and the site stays open.
    on every deploy, using whatever migrations exist in `prisma/migrations/`.
    You never need to run a migration by hand for a normal deploy.
 
-## Bringing over your test data
+## Importing and exporting data
 
-If you were testing the earlier browser-only version and used its "Export
-data" button, you have a JSON file with your themes and items. This project
-doesn't include an importer (schemas differ enough — cuid-based theme/item
-ids, a join table for tags — that a straight JSON import isn't a great fit),
-so the simplest path is to re-create that handful of items directly in the
-running app once it's deployed. If you'd rather script the import, the JSON
-shape is: `{ title, themes: [{name, color}], items: [{title, description,
-status, when, themeIds: [themeName,...]}] }` — happy to write a one-off
-import script if you want to hand me that export file.
+Both are built into the app's UI (top right, in Edit mode):
+- **Export data** downloads a JSON file with the current title, themes, and
+  items (including phases and theme tags).
+- **Import data** takes that same JSON shape (from this app's own Export,
+  or from the earlier browser-only prototype's Export) and adds it on top
+  of whatever's already there. It does not de-duplicate, importing the
+  same file twice creates two copies of everything, so only import a given
+  file once.
 
 ## Making future schema changes
 
