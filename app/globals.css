@@ -48,7 +48,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 720px; margin: 0 auto; padding: 56px 24px 120px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 56px 32px 120px; }
 
 header.top {
   display: flex;
