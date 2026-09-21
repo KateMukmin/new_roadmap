@@ -175,6 +175,10 @@ body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border
 .pill.now { background: var(--ink); color: var(--bg); }
 .pill.next { background: var(--border); color: var(--ink); border: 1px solid var(--border-strong); }
 .pill.later { background: transparent; color: var(--muted); border: 1px solid var(--border-strong); }
+.pill.released { background: var(--accent-3-tint); color: var(--accent-3); border: 1px solid var(--accent-3); }
+
+.released-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.released-toggle input { width: auto; }
 
 .item-body { flex: 1; min-width: 0; }
 .item-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }

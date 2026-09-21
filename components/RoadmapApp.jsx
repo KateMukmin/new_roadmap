@@ -62,8 +62,10 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   const [themeNameInput, setThemeNameInput] = useState('');
 
   const [reorderOpen, setReorderOpen] = useState(false);
+  const [showReleased, setShowReleased] = useState(false);
 
-  const untaggedItems = items.filter((i) => i.themeLinks.length === 0);
+  const visibleItems = showReleased ? items : items.filter((i) => i.status !== 'released');
+  const untaggedItems = visibleItems.filter((i) => i.themeLinks.length === 0);
 
   // Keep the active tab pointed at something real once themes/items load or change.
   useEffect(() => {
@@ -73,10 +75,10 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
       setActiveTab(themes.length ? themes[0].id : (untaggedItems.length ? 'untagged' : null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themes, items]);
+  }, [themes, items, showReleased]);
 
   function itemsForTheme(themeId) {
-    return items
+    return visibleItems
       .filter((i) => i.themeLinks.some((l) => l.themeId === themeId))
       .sort((a, b) => themePosition(a, themeId) - themePosition(b, themeId));
   }
@@ -308,6 +310,10 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               <button className="btn no-present" onClick={() => setReorderOpen(true)}>Reorder themes</button>
             )}
             {!present && <button className="btn no-present" onClick={() => setThemeModalOpen(true)}>+ Theme</button>}
+            <label className="released-toggle">
+              <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} />
+              Show released
+            </label>
             <button className="btn" onClick={() => setPresent((p) => !p)}>{present ? 'Edit' : 'Present'}</button>
           </div>
         </header>
@@ -336,9 +342,9 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               ))}
             </div>
 
-            {view === 'gantt' && <GanttView items={items} themes={themes} />}
-            {view === 'byTheme' && <ThemePieView items={items} themes={themes} itemsForTheme={itemsForTheme} />}
-            {view === 'byDate' && <DatePieView items={items} />}
+            {view === 'gantt' && <GanttView items={visibleItems} themes={themes} />}
+            {view === 'byTheme' && <ThemePieView items={visibleItems} themes={themes} itemsForTheme={itemsForTheme} />}
+            {view === 'byDate' && <DatePieView items={visibleItems} />}
 
             {(view === 'roadmap' || view === 'all') && (
               <div className="sort-bar">
@@ -357,7 +363,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
             {view === 'all' && (
               <AllItemsBlock
-                items={withOtherThemeNames(getSortedItems(items, sortMode), null)}
+                items={withOtherThemeNames(getSortedItems(visibleItems, sortMode), null)}
                 present={present}
                 onEditItem={openEditItemModal}
               />
@@ -455,6 +461,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                 <option value="now">Now</option>
                 <option value="next">Next</option>
                 <option value="later">Later</option>
+                <option value="released">Released</option>
               </select>
             </div>
             <div className="field">

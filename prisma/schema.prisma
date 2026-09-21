@@ -12,6 +12,7 @@ enum Status {
   NOW
   NEXT
   LATER
+  RELEASED
 }
 
 // Single row holding roadmap-wide settings (just the title, for now).
