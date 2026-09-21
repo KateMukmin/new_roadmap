@@ -63,6 +63,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
   const [reorderOpen, setReorderOpen] = useState(false);
   const [showReleased, setShowReleased] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const visibleItems = showReleased ? items : items.filter((i) => i.status !== 'released');
   const untaggedItems = visibleItems.filter((i) => i.themeLinks.length === 0);
@@ -81,6 +82,19 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
     return visibleItems
       .filter((i) => i.themeLinks.some((l) => l.themeId === themeId))
       .sort((a, b) => themePosition(a, themeId) - themePosition(b, themeId));
+  }
+
+  function matchesSearch(item) {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    if (item.title.toLowerCase().includes(q)) return true;
+    if (item.description && item.description.toLowerCase().includes(q)) return true;
+    if (item.phases && item.phases.some((p) => p.label.toLowerCase().includes(q))) return true;
+    const themeNames = item.themeLinks
+      .map((l) => (themes.find((t) => t.id === l.themeId) || {}).name || '')
+      .join(' ')
+      .toLowerCase();
+    return themeNames.includes(q);
   }
 
   // Attaches the names of an item's *other* themes (all except the one
@@ -342,75 +356,100 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               ))}
             </div>
 
-            {view === 'gantt' && <GanttView items={visibleItems} themes={themes} />}
-            {view === 'byTheme' && <ThemePieView items={visibleItems} themes={themes} itemsForTheme={itemsForTheme} />}
-            {view === 'byDate' && <DatePieView items={visibleItems} />}
+            <div className="search-bar">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search features, descriptions, phases, themes…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="btn ghost" onClick={() => setSearchQuery('')}>Clear</button>
+              )}
+            </div>
 
-            {(view === 'roadmap' || view === 'all') && (
-              <div className="sort-bar">
-                <span>Sort by</span>
-                {SORT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
-                    onClick={() => setSortMode(opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {view === 'all' && (
+            {searchQuery.trim() ? (
               <AllItemsBlock
-                items={withOtherThemeNames(getSortedItems(visibleItems, sortMode), null)}
+                title={`Search results for "${searchQuery.trim()}"`}
+                emptyMessage="No matches. Try a different search term."
+                items={withOtherThemeNames(getSortedItems(visibleItems.filter(matchesSearch), sortMode), null)}
                 present={present}
                 onEditItem={openEditItemModal}
               />
-            )}
-
-            {view === 'roadmap' && (
+            ) : (
               <>
-                <div className="tabs-wrap">
-                  {themes.map((theme) => (
-                    <button
-                      key={theme.id}
-                      className={`tab-btn${activeTab === theme.id ? ' active' : ''}`}
-                      style={{ '--tab-accent': `var(--${theme.color})`, '--tab-accent-tint': `var(--${theme.color}-tint)` }}
-                      onClick={() => setActiveTab(theme.id)}
-                    >
-                      <span>{theme.name}</span>
-                      <span className="tab-count">{itemsForTheme(theme.id).length}</span>
-                    </button>
-                  ))}
-                  {untaggedItems.length > 0 && (
-                    <button
-                      className={`tab-btn${activeTab === 'untagged' ? ' active' : ''}`}
-                      onClick={() => setActiveTab('untagged')}
-                    >
-                      <span>Untagged</span>
-                      <span className="tab-count">{untaggedItems.length}</span>
-                    </button>
-                  )}
-                </div>
+                {view === 'gantt' && <GanttView items={visibleItems} themes={themes} />}
+                {view === 'byTheme' && <ThemePieView items={visibleItems} themes={themes} itemsForTheme={itemsForTheme} />}
+                {view === 'byDate' && <DatePieView items={visibleItems} />}
 
-                {showingUntagged ? (
-                  <UntaggedBlock items={withOtherThemeNames(getSortedItems(untaggedItems, sortMode), null)} onEdit={openEditItemModal} />
-                ) : activeTheme ? (
-                  <ThemeBlock
-                    theme={activeTheme}
-                    items={withOtherThemeNames(getSortedItems(itemsForTheme(activeTheme.id), sortMode), activeTheme.id)}
+                {(view === 'roadmap' || view === 'all') && (
+                  <div className="sort-bar">
+                    <span>Sort by</span>
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        className={`sort-btn${sortMode === opt.id ? ' active' : ''}`}
+                        onClick={() => setSortMode(opt.id)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {view === 'all' && (
+                  <AllItemsBlock
+                    items={withOtherThemeNames(getSortedItems(visibleItems, sortMode), null)}
                     present={present}
-                    sortMode={sortMode}
-                    editing={editingThemeId === activeTheme.id}
-                    onStartRename={() => !present && setEditingThemeId(activeTheme.id)}
-                    onCommitRename={(name) => handleRenameTheme(activeTheme, name)}
-                    onDelete={() => handleDeleteTheme(activeTheme)}
-                    onAddItem={() => openAddItemModal(activeTheme.id)}
                     onEditItem={openEditItemModal}
-                    onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
+                  />
+                )}
+
+                {view === 'roadmap' && (
+                  <>
+                    <div className="tabs-wrap">
+                      {themes.map((theme) => (
+                        <button
+                          key={theme.id}
+                          className={`tab-btn${activeTab === theme.id ? ' active' : ''}`}
+                          style={{ '--tab-accent': `var(--${theme.color})`, '--tab-accent-tint': `var(--${theme.color}-tint)` }}
+                          onClick={() => setActiveTab(theme.id)}
+                        >
+                          <span>{theme.name}</span>
+                          <span className="tab-count">{itemsForTheme(theme.id).length}</span>
+                        </button>
+                      ))}
+                      {untaggedItems.length > 0 && (
+                        <button
+                          className={`tab-btn${activeTab === 'untagged' ? ' active' : ''}`}
+                          onClick={() => setActiveTab('untagged')}
+                        >
+                          <span>Untagged</span>
+                          <span className="tab-count">{untaggedItems.length}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {showingUntagged ? (
+                      <UntaggedBlock items={withOtherThemeNames(getSortedItems(untaggedItems, sortMode), null)} onEdit={openEditItemModal} />
+                    ) : activeTheme ? (
+                      <ThemeBlock
+                        theme={activeTheme}
+                        items={withOtherThemeNames(getSortedItems(itemsForTheme(activeTheme.id), sortMode), activeTheme.id)}
+                        present={present}
+                        sortMode={sortMode}
+                        editing={editingThemeId === activeTheme.id}
+                        onStartRename={() => !present && setEditingThemeId(activeTheme.id)}
+                        onCommitRename={(name) => handleRenameTheme(activeTheme, name)}
+                        onDelete={() => handleDeleteTheme(activeTheme)}
+                        onAddItem={() => openAddItemModal(activeTheme.id)}
+                        onEditItem={openEditItemModal}
+                        onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
                   />
                 ) : null}
+              </>
+            )}
               </>
             )}
           </>
@@ -611,15 +650,15 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
   );
 }
 
-function AllItemsBlock({ items, present, onEditItem }) {
+function AllItemsBlock({ items, present, onEditItem, title = 'All features', emptyMessage = 'Add some items first.' }) {
   return (
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
-        <h2>All features</h2>
+        <h2>{title}</h2>
         <span className="count">{items.length} item{items.length === 1 ? '' : 's'}</span>
       </div>
       {items.length === 0 ? (
-        <div className="empty-state"><h2>Nothing here yet</h2><p>Add some items first.</p></div>
+        <div className="empty-state"><h2>Nothing here</h2><p>{emptyMessage}</p></div>
       ) : (
         items.map((item) => (
           <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} reorder={null} />
