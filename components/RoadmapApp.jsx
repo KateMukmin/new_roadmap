@@ -14,7 +14,7 @@ import {
   updateItem,
   updateTitle,
 } from '@/lib/actions';
-import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, countLabel } from '@/lib/roadmapUtils';
+import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, countLabel, looksLikeUrl, containsUrl, linkifyParts } from '@/lib/roadmapUtils';
 
 const SORT_OPTIONS = [
   { id: 'status', label: 'Status' },
@@ -476,6 +476,17 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                 onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
                 placeholder="Paste the Jira epic URL"
               />
+              {containsUrl(itemForm.description) && (
+                <div className="link-preview">
+                  {linkifyParts(itemForm.description).map((part, i) =>
+                    typeof part === 'string' ? (
+                      <span key={i}>{part}</span>
+                    ) : (
+                      <a key={i} href={part.url} target="_blank" rel="noopener noreferrer">{part.url}</a>
+                    )
+                  )}
+                </div>
+              )}
             </div>
             <div className="field">
               <label>Themes (an item can belong to more than one)</label>
@@ -690,7 +701,19 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
         <div className="item-title">
           {item.title}
           {item.description && (
-            <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
+            looksLikeUrl(item.description) ? (
+              <a
+                className="item-link-badge"
+                href={item.description.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open the linked Jira epic"
+              >
+                Linked ↗
+              </a>
+            ) : (
+              <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
+            )
           )}
         </div>
         {item.phases && item.phases.length > 0 && (
