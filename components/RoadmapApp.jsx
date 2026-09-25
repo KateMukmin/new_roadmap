@@ -14,7 +14,7 @@ import {
   updateItem,
   updateTitle,
 } from '@/lib/actions';
-import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS } from '@/lib/roadmapUtils';
+import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, countLabel } from '@/lib/roadmapUtils';
 
 const SORT_OPTIONS = [
   { id: 'status', label: 'Status' },
@@ -308,7 +308,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
             ) : (
               <h1 onClick={() => !present && setEditingTitle(true)}>{title}</h1>
             )}
-            <div className="meta">{items.length === 0 ? 'No items yet' : `${items.length} item${items.length === 1 ? '' : 's'} on the roadmap`}</div>
+            <div className="meta">{visibleItems.length === 0 ? 'No items yet' : `${countLabel(visibleItems)} on the roadmap`}</div>
           </div>
           <div className="mode-toggle">
             {!present && <button className="btn no-present" onClick={handleExport}>Export data</button>}
@@ -470,11 +470,11 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               />
             </div>
             <div className="field">
-              <label>Description (optional)</label>
+              <label>Jira epic link (optional)</label>
               <textarea
                 value={itemForm.description}
                 onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                placeholder="One line stakeholders will understand"
+                placeholder="Paste the Jira epic URL"
               />
             </div>
             <div className="field">
@@ -613,7 +613,7 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
         ) : (
           <h2 onClick={onStartRename}>{theme.name}</h2>
         )}
-        <span className="count">{items.length} item{items.length === 1 ? '' : 's'}</span>
+        <span className="count">{countLabel(items)}</span>
         {!present && (
           <div className="theme-actions">
             <button className="icon-btn" title="Delete theme (items stay, just untagged from it)" onClick={onDelete}>✕</button>
@@ -655,7 +655,7 @@ function AllItemsBlock({ items, present, onEditItem, title = 'All features', emp
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
         <h2>{title}</h2>
-        <span className="count">{items.length} item{items.length === 1 ? '' : 's'}</span>
+        <span className="count">{countLabel(items)}</span>
       </div>
       {items.length === 0 ? (
         <div className="empty-state"><h2>Nothing here</h2><p>{emptyMessage}</p></div>
@@ -673,7 +673,7 @@ function UntaggedBlock({ items, onEdit }) {
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
         <h2>Untagged</h2>
-        <span className="count">{items.length} item{items.length === 1 ? '' : 's'}</span>
+        <span className="count">{countLabel(items)}</span>
       </div>
       {items.map((item) => (
         <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} reorder={null} />
@@ -687,8 +687,12 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
     <div className="item" style={{ '--accent': accentVar, '--accent-tint': tintVar }}>
       <span className={`pill ${item.status}`}>{STATUS_LABEL[item.status] || 'Now'}</span>
       <div className="item-body">
-        <div className="item-title">{item.title}</div>
-        {item.description && <div className="item-desc">{item.description}</div>}
+        <div className="item-title">
+          {item.title}
+          {item.description && (
+            <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
+          )}
+        </div>
         {item.phases && item.phases.length > 0 && (
           <div className="subitems">
             {item.phases.map((p) => (
