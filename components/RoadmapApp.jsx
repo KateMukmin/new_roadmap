@@ -14,7 +14,7 @@ import {
   updateItem,
   updateTitle,
 } from '@/lib/actions';
-import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, countLabel, looksLikeUrl, containsUrl, linkifyParts } from '@/lib/roadmapUtils';
+import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, containsUrl, linkifyParts } from '@/lib/roadmapUtils';
 
 const SORT_OPTIONS = [
   { id: 'status', label: 'Status' },
@@ -308,7 +308,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
             ) : (
               <h1 onClick={() => !present && setEditingTitle(true)}>{title}</h1>
             )}
-            <div className="meta">{visibleItems.length === 0 ? 'No items yet' : `${countLabel(visibleItems)} on the roadmap`}</div>
+            <div className="meta">{visibleItems.length === 0 ? 'No items yet' : <>{<CountLabel items={visibleItems} />} on the roadmap</>}</div>
           </div>
           <div className="mode-toggle">
             {!present && <button className="btn no-present" onClick={handleExport}>Export data</button>}
@@ -624,7 +624,7 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
         ) : (
           <h2 onClick={onStartRename}>{theme.name}</h2>
         )}
-        <span className="count">{countLabel(items)}</span>
+        <span className="count"><CountLabel items={items} /></span>
         {!present && (
           <div className="theme-actions">
             <button className="icon-btn" title="Delete theme (items stay, just untagged from it)" onClick={onDelete}>✕</button>
@@ -661,12 +661,30 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
   );
 }
 
+function CountLabel({ items }) {
+  const itemCount = items.length;
+  const phaseCount = items.reduce((sum, i) => sum + ((i.phases && i.phases.length) || 0), 0);
+  const linkedCount = items.filter((i) => i.description && i.description.trim()).length;
+  const allLinked = itemCount > 0 && linkedCount === itemCount;
+
+  const base = `${itemCount} item${itemCount === 1 ? '' : 's'}` +
+    (phaseCount > 0 ? ` + ${phaseCount} feature phase${phaseCount === 1 ? '' : 's'}` : '');
+
+  if (linkedCount === 0) return <>{base}</>;
+
+  return (
+    <>
+      {base}, <span className={allLinked ? 'count-highlight' : undefined}>{linkedCount} item{linkedCount === 1 ? '' : 's'} linked</span>
+    </>
+  );
+}
+
 function AllItemsBlock({ items, present, onEditItem, title = 'All features', emptyMessage = 'Add some items first.' }) {
   return (
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
         <h2>{title}</h2>
-        <span className="count">{countLabel(items)}</span>
+        <span className="count"><CountLabel items={items} /></span>
       </div>
       {items.length === 0 ? (
         <div className="empty-state"><h2>Nothing here</h2><p>{emptyMessage}</p></div>
@@ -684,7 +702,7 @@ function UntaggedBlock({ items, onEdit }) {
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
         <h2>Untagged</h2>
-        <span className="count">{countLabel(items)}</span>
+        <span className="count"><CountLabel items={items} /></span>
       </div>
       {items.map((item) => (
         <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} reorder={null} />
@@ -701,19 +719,7 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
         <div className="item-title">
           {item.title}
           {item.description && (
-            looksLikeUrl(item.description) ? (
-              <a
-                className="item-link-badge"
-                href={item.description.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open the linked Jira epic"
-              >
-                Linked ↗
-              </a>
-            ) : (
-              <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
-            )
+            <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
           )}
         </div>
         {item.phases && item.phases.length > 0 && (
