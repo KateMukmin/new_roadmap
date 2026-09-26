@@ -63,10 +63,17 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
   const [reorderOpen, setReorderOpen] = useState(false);
   const [showReleased, setShowReleased] = useState(false);
+  const [linkFilter, setLinkFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
   const [searchQuery, setSearchQuery] = useState('');
 
   const visibleItems = showReleased ? items : items.filter((i) => i.status !== 'released');
-  const untaggedItems = visibleItems.filter((i) => i.themeLinks.length === 0);
+  const displayItems = visibleItems.filter((i) => {
+    const hasLink = !!(i.description && i.description.trim());
+    if (linkFilter === 'linked') return hasLink;
+    if (linkFilter === 'unlinked') return !hasLink;
+    return true;
+  });
+  const untaggedItems = displayItems.filter((i) => i.themeLinks.length === 0);
 
   // Keep the active tab pointed at something real once themes/items load or change.
   useEffect(() => {
@@ -76,10 +83,10 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
       setActiveTab(themes.length ? themes[0].id : (untaggedItems.length ? 'untagged' : null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themes, items, showReleased]);
+  }, [themes, items, showReleased, linkFilter]);
 
   function itemsForTheme(themeId) {
-    return visibleItems
+    return displayItems
       .filter((i) => i.themeLinks.some((l) => l.themeId === themeId))
       .sort((a, b) => themePosition(a, themeId) - themePosition(b, themeId));
   }
@@ -308,7 +315,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
             ) : (
               <h1 onClick={() => !present && setEditingTitle(true)}>{title}</h1>
             )}
-            <div className="meta">{visibleItems.length === 0 ? 'No items yet' : <>{<CountLabel items={visibleItems} />} on the roadmap</>}</div>
+            <div className="meta">{displayItems.length === 0 ? 'No items yet' : <>{<CountLabel items={displayItems} />} on the roadmap</>}</div>
           </div>
           <div className="mode-toggle">
             {!present && <button className="btn no-present" onClick={handleExport}>Export data</button>}
@@ -328,6 +335,18 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} />
               Show released
             </label>
+            <div className="link-filter">
+              <span>Links:</span>
+              {['all', 'linked', 'unlinked'].map((opt) => (
+                <button
+                  key={opt}
+                  className={`sort-btn${linkFilter === opt ? ' active' : ''}`}
+                  onClick={() => setLinkFilter(opt)}
+                >
+                  {opt === 'all' ? 'All' : opt === 'linked' ? 'Linked' : 'Unlinked'}
+                </button>
+              ))}
+            </div>
             <button className="btn" onClick={() => setPresent((p) => !p)}>{present ? 'Edit' : 'Present'}</button>
           </div>
         </header>
@@ -373,15 +392,15 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               <AllItemsBlock
                 title={`Search results for "${searchQuery.trim()}"`}
                 emptyMessage="No matches. Try a different search term."
-                items={withOtherThemeNames(getSortedItems(visibleItems.filter(matchesSearch), sortMode), null)}
+                items={withOtherThemeNames(getSortedItems(displayItems.filter(matchesSearch), sortMode), null)}
                 present={present}
                 onEditItem={openEditItemModal}
               />
             ) : (
               <>
-                {view === 'gantt' && <GanttView items={visibleItems} themes={themes} />}
-                {view === 'byTheme' && <ThemePieView items={visibleItems} themes={themes} itemsForTheme={itemsForTheme} />}
-                {view === 'byDate' && <DatePieView items={visibleItems} />}
+                {view === 'gantt' && <GanttView items={displayItems} themes={themes} />}
+                {view === 'byTheme' && <ThemePieView items={displayItems} themes={themes} itemsForTheme={itemsForTheme} />}
+                {view === 'byDate' && <DatePieView items={displayItems} />}
 
                 {(view === 'roadmap' || view === 'all') && (
                   <div className="sort-bar">
@@ -400,7 +419,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
                 {view === 'all' && (
                   <AllItemsBlock
-                    items={withOtherThemeNames(getSortedItems(visibleItems, sortMode), null)}
+                    items={withOtherThemeNames(getSortedItems(displayItems, sortMode), null)}
                     present={present}
                     onEditItem={openEditItemModal}
                   />

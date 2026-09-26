@@ -194,6 +194,7 @@ body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border
 
 .released-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .released-toggle input { width: auto; }
+.link-filter { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
 
 .item-body { flex: 1; min-width: 0; }
 .item-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
