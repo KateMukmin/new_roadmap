@@ -62,9 +62,23 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   const [themeNameInput, setThemeNameInput] = useState('');
 
   const [reorderOpen, setReorderOpen] = useState(false);
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [showReleased, setShowReleased] = useState(false);
   const [linkFilter, setLinkFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
   const [searchQuery, setSearchQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const optionsMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e) {
+      if (optionsMenuRef.current && !optionsMenuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   const visibleItems = showReleased ? items : items.filter((i) => i.status !== 'released');
   const displayItems = visibleItems.filter((i) => {
@@ -318,8 +332,41 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
             <div className="meta">{displayItems.length === 0 ? 'No items yet' : <>{<CountLabel items={displayItems} />} on the roadmap</>}</div>
           </div>
           <div className="mode-toggle">
-            {!present && <button className="btn no-present" onClick={handleExport}>Export data</button>}
-            {!present && <button className="btn no-present" onClick={handleImportClick}>Import data</button>}
+            <div className="options-menu-wrap" ref={optionsMenuRef}>
+              <button className="btn" onClick={() => setMenuOpen((o) => !o)}>Options ▾</button>
+              {menuOpen && (
+                <div className="options-menu">
+                  {!present && (
+                    <>
+                      <button className="option-row" onClick={() => { handleExport(); setMenuOpen(false); }}>Export data</button>
+                      <button className="option-row" onClick={() => { handleImportClick(); setMenuOpen(false); }}>Import data</button>
+                      {themes.length >= 2 && (
+                        <button className="option-row" onClick={() => { setReorderOpen(true); setMenuOpen(false); }}>Reorder themes</button>
+                      )}
+                      <button className="option-row" onClick={() => { setThemeModalOpen(true); setMenuOpen(false); }}>+ Theme</button>
+                      <button className="option-row" onClick={() => { setWalkthroughOpen(true); setMenuOpen(false); }}>How to add an item</button>
+                      <div className="option-divider" />
+                    </>
+                  )}
+                  <label className="option-row option-checkbox">
+                    <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} />
+                    Show released
+                  </label>
+                  <div className="option-row option-links">
+                    <span>Links:</span>
+                    {['all', 'linked', 'unlinked'].map((opt) => (
+                      <button
+                        key={opt}
+                        className={`sort-btn${linkFilter === opt ? ' active' : ''}`}
+                        onClick={() => setLinkFilter(opt)}
+                      >
+                        {opt === 'all' ? 'All' : opt === 'linked' ? 'Linked' : 'Unlinked'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <input
               type="file"
               accept="application/json"
@@ -327,26 +374,6 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               style={{ display: 'none' }}
               onChange={handleImportFileChange}
             />
-            {!present && themes.length >= 2 && (
-              <button className="btn no-present" onClick={() => setReorderOpen(true)}>Reorder themes</button>
-            )}
-            {!present && <button className="btn no-present" onClick={() => setThemeModalOpen(true)}>+ Theme</button>}
-            <label className="released-toggle">
-              <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} />
-              Show released
-            </label>
-            <div className="link-filter">
-              <span>Links:</span>
-              {['all', 'linked', 'unlinked'].map((opt) => (
-                <button
-                  key={opt}
-                  className={`sort-btn${linkFilter === opt ? ' active' : ''}`}
-                  onClick={() => setLinkFilter(opt)}
-                >
-                  {opt === 'all' ? 'All' : opt === 'linked' ? 'Linked' : 'Unlinked'}
-                </button>
-              ))}
-            </div>
             <button className="btn" onClick={() => setPresent((p) => !p)}>{present ? 'Edit' : 'Present'}</button>
           </div>
         </header>
@@ -616,6 +643,34 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               <span />
               <div className="right">
                 <button className="btn primary" onClick={() => setReorderOpen(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {walkthroughOpen && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setWalkthroughOpen(false); }}>
+          <div className="modal walkthrough-modal">
+            <h3>How to add an item to FCA Roadmap</h3>
+            <ol className="walkthrough-steps">
+              <li>Create an item in one of the buckets, choose its status, and add more labels if necessary.</li>
+              <li>Create a corresponding epic in Jira.</li>
+              <li>
+                Add the following labels to the epic in Jira:
+                <ul>
+                  <li><strong>New Roadmap</strong> (without this label, the epic will not appear in the roadmap view)</li>
+                  <li>Labels corresponding to buckets in this roadmap (Legacy Parity, Net New, etc.)</li>
+                  <li>Status label (Now, Next, or Later)</li>
+                </ul>
+              </li>
+              <li>Add the epic link into the item you have created in this roadmap.</li>
+              <li>Save.</li>
+            </ol>
+            <div className="modal-actions">
+              <span />
+              <div className="right">
+                <button className="btn primary" onClick={() => setWalkthroughOpen(false)}>Got it</button>
               </div>
             </div>
           </div>

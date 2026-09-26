@@ -192,9 +192,41 @@ body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border
 .pill.later { background: transparent; color: var(--muted); border: 1px solid var(--border-strong); }
 .pill.released { background: var(--accent-3-tint); color: var(--accent-3); border: 1px solid var(--accent-3); }
 
-.released-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.released-toggle input { width: auto; }
-.link-filter { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.options-menu-wrap { position: relative; }
+.options-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(20, 20, 18, 0.12);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-family: inherit;
+}
+button.option-row:hover { background: var(--border); }
+.option-checkbox input { width: auto; }
+.option-links { flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.option-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 
 .item-body { flex: 1; min-width: 0; }
 .item-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
@@ -265,6 +297,12 @@ body.present .no-present { display: none !important; }
 
 .reorder-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
 .reorder-row .name { flex: 1; font-size: 14px; }
+
+.walkthrough-modal { max-width: 480px; }
+.walkthrough-steps { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--ink); }
+.walkthrough-steps li { margin-bottom: 12px; }
+.walkthrough-steps ul { margin: 8px 0 0; padding-left: 18px; }
+.walkthrough-steps ul li { margin-bottom: 6px; color: var(--muted); }
 
 @media print {
   .no-present, .mode-toggle, .add-item-row, .item-actions, .theme-actions { display: none !important; }
