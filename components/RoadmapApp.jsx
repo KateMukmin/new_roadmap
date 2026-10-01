@@ -1131,7 +1131,12 @@ function IntakeView({ items, themes, meetings, router, present }) {
   const scheduledIds = {};
   meetings.forEach((m) => m.agendaItems.forEach((a) => { scheduledIds[a.itemId] = true; }));
 
-  const eligible = items.filter((i) => (i.status === 'next' || i.status === 'later') && !scheduledIds[i.id]);
+  const eligible = items
+    .filter((i) => (i.status === 'next' || i.status === 'later') && !scheduledIds[i.id])
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'next' ? -1 : 1;
+      return a.title.localeCompare(b.title);
+    });
 
   const thursdays = getThursdays();
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1160,7 +1165,7 @@ function IntakeView({ items, themes, meetings, router, present }) {
                 .filter(Boolean)
                 .map((t) => t.name)
                 .join(', ');
-              return <option key={item.id} value={item.id}>{item.title}{themeNames ? ` (${themeNames})` : ''}</option>;
+              return <option key={item.id} value={item.id}>[{item.status === 'next' ? 'Next' : 'Later'}] {item.title}{themeNames ? ` (${themeNames})` : ''}</option>;
             })}
           </select>
           <select style={{ width: 200 }} value={addMeetingDate} onChange={(e) => setAddMeetingDate(e.target.value)}>
