@@ -31,15 +31,20 @@ model Theme {
 }
 
 model Item {
-  id          String      @id @default(cuid())
-  title       String
-  description String?
-  status      Status      @default(NOW)
-  when        String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  themes      ThemeItem[]
-  phases      Phase[]
+  id               String        @id @default(cuid())
+  title            String
+  description      String?
+  status           Status        @default(NOW)
+  when             String?
+  intake           Boolean       @default(false)
+  approvedDate     String?
+  approvedBy       String?
+  approvedDecision String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  themes           ThemeItem[]
+  phases           Phase[]
+  meetingItems     MeetingItem[]
 }
 
 // Join table: lets one item belong to several themes, and tracks the
@@ -70,5 +75,27 @@ model Phase {
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  @@index([itemId])
+}
+
+model Meeting {
+  id    String        @id @default(cuid())
+  date  String        @unique
+  items MeetingItem[]
+}
+
+model MeetingItem {
+  id        String  @id @default(cuid())
+  meetingId String
+  itemId    String
+  decision  String  @default("pending")
+  signoff   String?
+  applied   Boolean @default(false)
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, itemId])
+  @@index([meetingId])
   @@index([itemId])
 }

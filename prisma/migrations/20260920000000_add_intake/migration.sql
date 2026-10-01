@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Item" ADD COLUMN "intake" BOOLEAN NOT NULL DEFAULT false;

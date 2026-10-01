@@ -224,8 +224,11 @@ body:not(.present) .theme-head h2:hover { background: var(--accent-tint); border
   font-family: inherit;
 }
 button.option-row:hover { background: var(--border); }
-.option-checkbox input { width: auto; }
-.option-links { flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.option-row .option-check { margin-left: auto; color: var(--accent-3); font-weight: 600; font-size: 14px; }
+
+.intake-btn { border-color: var(--accent-4); color: var(--accent-4); }
+.intake-btn:hover { background: var(--accent-4-tint); }
+.intake-btn.active { background: var(--accent-4); color: var(--bg); border-color: var(--accent-4); }
 .option-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 
 .item-body { flex: 1; min-width: 0; }
@@ -313,3 +316,67 @@ body.present .no-present { display: none !important; }
   header.top { flex-direction: column; }
   .item { flex-wrap: wrap; }
 }
+
+/* ---- Intake meeting sections ---- */
+.meeting-section { margin-bottom: 32px; }
+.meeting-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-left: 4px solid var(--accent-4);
+  background: var(--accent-4-tint);
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 12px;
+}
+.meeting-header h3 { margin: 0; font-family: 'Source Serif 4', Georgia, serif; font-size: 17px; color: var(--ink); }
+.meeting-header .meeting-date { color: var(--muted); font-size: 13px; }
+.meeting-empty { color: var(--muted); font-size: 13.5px; padding: 8px 16px; font-style: italic; }
+
+.agenda-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--card);
+  flex-wrap: wrap;
+}
+.agenda-row .agenda-title { flex: 1; min-width: 140px; font-weight: 600; font-size: 14px; padding-top: 4px; }
+.agenda-row .agenda-title .item-tag { margin-left: 6px; }
+.agenda-row select, .agenda-row input {
+  font-family: inherit; font-size: 12.5px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px 8px; background: var(--bg); color: var(--ink);
+}
+.agenda-row select { width: 150px; }
+.agenda-row input { width: 140px; }
+.agenda-row .agenda-field { display: flex; flex-direction: column; gap: 2px; }
+.agenda-row .agenda-field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.agenda-row.decided-next { border-left: 3px solid var(--accent-3); }
+.agenda-row.decided-later { border-left: 3px solid var(--accent-5); }
+.agenda-row .agenda-remove { margin-left: auto; align-self: center; }
+
+.unscheduled-section { margin-bottom: 36px; }
+.unscheduled-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  border-left: 4px solid var(--border-strong);
+  background: var(--border);
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 12px;
+}
+.unscheduled-header h3 { margin: 0; font-size: 16px; font-family: 'Source Serif 4', Georgia, serif; }
+.unscheduled-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--card);
+}
+.unscheduled-row select {
+  font-family: inherit; font-size: 12.5px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px 8px; background: var(--bg); color: var(--ink);
+}
+
+.item-approval { font-size: 12px; color: var(--accent-3); margin: 2px 0 4px; line-height: 1.4; }

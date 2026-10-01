@@ -3,15 +3,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  addItemToMeeting,
+  applyMeetingItemDecision,
   createItem,
   createTheme,
   deleteItem,
   deleteTheme,
   importRoadmapData,
+  removeItemFromMeeting,
   renameTheme,
   reorderThemeItems,
   reorderThemes,
   updateItem,
+  updateItemIntake,
+  updateMeetingItemDecision,
+  updateMeetingItemSignoff,
   updateTitle,
 } from '@/lib/actions';
 import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, containsUrl, linkifyParts } from '@/lib/roadmapUtils';
@@ -30,7 +36,7 @@ const VIEW_OPTIONS = [
   { id: 'byDate', label: 'By date' },
 ];
 
-export default function RoadmapApp({ initialTitle, initialThemes, initialItems }) {
+export default function RoadmapApp({ initialTitle, initialThemes, initialItems, initialMeetings }) {
   const router = useRouter();
 
   // Server-backed state, kept in sync with the props Next.js re-sends
@@ -38,12 +44,14 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   const [title, setTitle] = useState(initialTitle);
   const [themes, setThemes] = useState(initialThemes);
   const [items, setItems] = useState(initialItems);
+  const [meetings, setMeetings] = useState(initialMeetings || []);
 
   useEffect(() => {
     setTitle(initialTitle);
     setThemes(initialThemes);
     setItems(initialItems);
-  }, [initialTitle, initialThemes, initialItems]);
+    setMeetings(initialMeetings || []);
+  }, [initialTitle, initialThemes, initialItems, initialMeetings]);
 
   // Purely local UI state, not persisted, so it survives a refresh but
   // resets to defaults ("Status" sort) on a fresh page load.
@@ -55,8 +63,8 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   const [editingThemeId, setEditingThemeId] = useState(null);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null); // null = "add" mode
-  const [itemForm, setItemForm] = useState({ title: '', description: '', status: 'now', when: '', themeIds: [], phases: [] });
+  const [editingItem, setEditingItem] = useState(null);
+  const [itemForm, setItemForm] = useState({ title: '', description: '', status: 'now', when: '', themeIds: [], phases: [], intake: false });
 
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [themeNameInput, setThemeNameInput] = useState('');
@@ -157,7 +165,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
 
   function openAddItemModal(defaultThemeId) {
     setEditingItem(null);
-    setItemForm({ title: '', description: '', status: 'now', when: '', themeIds: defaultThemeId ? [defaultThemeId] : [], phases: [] });
+    setItemForm({ title: '', description: '', status: 'now', when: '', themeIds: defaultThemeId ? [defaultThemeId] : [], phases: [], intake: false });
     setItemModalOpen(true);
   }
 
@@ -170,6 +178,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
       when: item.when || '',
       themeIds: item.themeLinks.map((l) => l.themeId),
       phases: (item.phases || []).map((p) => ({ label: p.label, when: p.when })),
+      intake: !!item.intake,
     });
     setItemModalOpen(true);
   }
@@ -195,6 +204,11 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
     if (!editingItem) return;
     await deleteItem(editingItem.id);
     setItemModalOpen(false);
+    router.refresh();
+  }
+
+  async function handleToggleIntake(item) {
+    await updateItemIntake(item.id, !item.intake);
     router.refresh();
   }
 
@@ -343,27 +357,20 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                       {themes.length >= 2 && (
                         <button className="option-row" onClick={() => { setReorderOpen(true); setMenuOpen(false); }}>Reorder themes</button>
                       )}
-                      <button className="option-row" onClick={() => { setThemeModalOpen(true); setMenuOpen(false); }}>+ Theme</button>
+                      <button className="option-row" onClick={() => { setThemeModalOpen(true); setMenuOpen(false); }}>Add theme</button>
                       <button className="option-row" onClick={() => { setWalkthroughOpen(true); setMenuOpen(false); }}>How to add an item</button>
                       <div className="option-divider" />
                     </>
                   )}
-                  <label className="option-row option-checkbox">
-                    <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} />
-                    Show released
-                  </label>
-                  <div className="option-row option-links">
-                    <span>Links:</span>
-                    {['all', 'linked', 'unlinked'].map((opt) => (
-                      <button
-                        key={opt}
-                        className={`sort-btn${linkFilter === opt ? ' active' : ''}`}
-                        onClick={() => setLinkFilter(opt)}
-                      >
-                        {opt === 'all' ? 'All' : opt === 'linked' ? 'Linked' : 'Unlinked'}
-                      </button>
-                    ))}
-                  </div>
+                  <button className="option-row" onClick={() => { setShowReleased((v) => !v); }}>
+                    Show released{showReleased && <span className="option-check">✓</span>}
+                  </button>
+                  <button className="option-row" onClick={() => { setLinkFilter((v) => v === 'linked' ? 'all' : 'linked'); }}>
+                    Show linked only{linkFilter === 'linked' && <span className="option-check">✓</span>}
+                  </button>
+                  <button className="option-row" onClick={() => { setLinkFilter((v) => v === 'unlinked' ? 'all' : 'unlinked'); }}>
+                    Show unlinked only{linkFilter === 'unlinked' && <span className="option-check">✓</span>}
+                  </button>
                 </div>
               )}
             </div>
@@ -374,6 +381,12 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               style={{ display: 'none' }}
               onChange={handleImportFileChange}
             />
+            <button
+              className={`btn intake-btn${view === 'intake' ? ' active' : ''}`}
+              onClick={() => setView((v) => v === 'intake' ? 'roadmap' : 'intake')}
+            >
+              ★ Intake
+            </button>
             <button className="btn" onClick={() => setPresent((p) => !p)}>{present ? 'Edit' : 'Present'}</button>
           </div>
         </header>
@@ -388,6 +401,8 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               </button>
             )}
           </div>
+        ) : view === 'intake' ? (
+          <IntakeView items={items} themes={themes} meetings={meetings} router={router} present={present} />
         ) : (
           <>
             <div className="view-bar">
@@ -422,6 +437,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                 items={withOtherThemeNames(getSortedItems(displayItems.filter(matchesSearch), sortMode), null)}
                 present={present}
                 onEditItem={openEditItemModal}
+                onToggleIntake={handleToggleIntake}
               />
             ) : (
               <>
@@ -449,6 +465,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                     items={withOtherThemeNames(getSortedItems(displayItems, sortMode), null)}
                     present={present}
                     onEditItem={openEditItemModal}
+                onToggleIntake={handleToggleIntake}
                   />
                 )}
 
@@ -491,7 +508,9 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
                         onDelete={() => handleDeleteTheme(activeTheme)}
                         onAddItem={() => openAddItemModal(activeTheme.id)}
                         onEditItem={openEditItemModal}
+                onToggleIntake={handleToggleIntake}
                         onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
+                        onToggleIntake={handleToggleIntake}
                   />
                 ) : null}
               </>
@@ -591,6 +610,26 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
               </div>
               <button type="button" className="btn" style={{ marginTop: 8 }} onClick={addPhaseRow}>+ Add phase</button>
             </div>
+            <div className="field">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 'normal' }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={itemForm.intake}
+                  disabled={itemForm.status === 'now'}
+                  onChange={(e) => setItemForm({ ...itemForm, intake: e.target.checked })}
+                />
+                Add to Intake
+              </label>
+              {itemForm.status === 'now' && (
+                <div style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 4 }}>Items with status Now can't be in Intake.</div>
+              )}
+              {editingItem && editingItem.approvedDate && (
+                <div className="item-approval" style={{ marginTop: 6 }}>
+                  {editingItem.approvedDecision === 'next' ? 'Approved to Next' : 'Kept in Later'} on {formatMeetingDateDisplay(editingItem.approvedDate)} — signed off by {editingItem.approvedBy || 'unknown'}
+                </div>
+              )}
+            </div>
             <div className="modal-actions">
               {editingItem ? <button className="btn ghost" onClick={handleDeleteItem}>Delete</button> : <span />}
               <div className="right">
@@ -680,7 +719,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems }
   );
 }
 
-function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, onCommitRename, onDelete, onAddItem, onEditItem, onMoveItem }) {
+function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, onCommitRename, onDelete, onAddItem, onEditItem, onMoveItem, onToggleIntake }) {
   const accentVar = `var(--${theme.color})`;
   const tintVar = `var(--${theme.color}-tint)`;
 
@@ -715,6 +754,7 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
           showTagsExcept={theme.id}
           present={present}
           onEdit={() => onEditItem(item)}
+          onToggleIntake={onToggleIntake}
           reorder={
             sortMode === 'status'
               ? {
@@ -753,7 +793,7 @@ function CountLabel({ items }) {
   );
 }
 
-function AllItemsBlock({ items, present, onEditItem, title = 'All features', emptyMessage = 'Add some items first.' }) {
+function AllItemsBlock({ items, present, onEditItem, onToggleIntake, title = 'All features', emptyMessage = 'Add some items first.' }) {
   return (
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
@@ -764,7 +804,7 @@ function AllItemsBlock({ items, present, onEditItem, title = 'All features', emp
         <div className="empty-state"><h2>Nothing here</h2><p>{emptyMessage}</p></div>
       ) : (
         items.map((item) => (
-          <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} reorder={null} />
+          <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} onToggleIntake={onToggleIntake} reorder={null} />
         ))
       )}
     </div>
@@ -779,13 +819,13 @@ function UntaggedBlock({ items, onEdit }) {
         <span className="count"><CountLabel items={items} /></span>
       </div>
       {items.map((item) => (
-        <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} reorder={null} />
+        <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} onToggleIntake={null} reorder={null} />
       ))}
     </div>
   );
 }
 
-function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, reorder }) {
+function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, reorder, onToggleIntake }) {
   return (
     <div className="item" style={{ '--accent': accentVar, '--accent-tint': tintVar }}>
       <span className={`pill ${item.status}`}>{STATUS_LABEL[item.status] || 'Now'}</span>
@@ -796,6 +836,11 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
             <span className="item-link-badge" title="Has a linked Jira epic — open the item to view">Linked</span>
           )}
         </div>
+        {item.approvedDate && (
+          <div className="item-approval">
+            {item.approvedDecision === 'next' ? 'Approved to Next' : 'Kept in Later'} on {formatMeetingDateDisplay(item.approvedDate)} — signed off by {item.approvedBy || 'unknown'}
+          </div>
+        )}
         {item.phases && item.phases.length > 0 && (
           <div className="subitems">
             {item.phases.map((p) => (
@@ -822,6 +867,13 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
               <button className="icon-btn" disabled={reorder.isFirst} onClick={reorder.onUp} title="Move up">↑</button>
               <button className="icon-btn" disabled={reorder.isLast} onClick={reorder.onDown} title="Move down">↓</button>
             </>
+          )}
+          {item.status !== 'now' && onToggleIntake && (
+            <button
+              className={`icon-btn${item.intake ? ' active-intake' : ''}`}
+              onClick={() => onToggleIntake(item)}
+              title={item.intake ? 'Remove from Intake' : 'Add to Intake'}
+            >★</button>
           )}
           <button className="icon-btn" onClick={onEdit} title="Edit">✎</button>
         </div>
@@ -1041,6 +1093,189 @@ function GanttView({ items, themes }) {
         <p className="chart-note">
           {noDateCount} item{noDateCount === 1 ? '' : 's'} {noDateCount === 1 ? "isn't" : "aren't"} shown here (no target date set).
         </p>
+      )}
+    </div>
+  );
+}
+
+const MEETING_WEEKS = 6;
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function formatMeetingDateDisplay(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function getThursdays() {
+  const list = [];
+  const start = new Date(2026, 9, 1); // Oct 1, 2026
+  const today = new Date(); today.setHours(0,0,0,0);
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + MEETING_WEEKS * 7);
+  const cursor = new Date(start);
+  while (cursor.getDay() !== 4) cursor.setDate(cursor.getDate() + 1);
+  let guard = 0;
+  while (cursor <= endDate && guard < 100) {
+    list.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 7);
+    guard++;
+  }
+  return list;
+}
+
+function IntakeView({ items, themes, meetings, router, present }) {
+  const [addItemId, setAddItemId] = useState('');
+  const [addMeetingDate, setAddMeetingDate] = useState('');
+
+  const scheduledIds = {};
+  meetings.forEach((m) => m.agendaItems.forEach((a) => { scheduledIds[a.itemId] = true; }));
+
+  const eligible = items.filter((i) => (i.status === 'next' || i.status === 'later') && !scheduledIds[i.id]);
+
+  const thursdays = getThursdays();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcomingThursdays = thursdays.filter((d) => new Date(d + 'T00:00:00') >= today);
+
+  async function handleAdd() {
+    if (!addItemId || !addMeetingDate) return;
+    await addItemToMeeting(addMeetingDate, addItemId);
+    setAddItemId('');
+    setAddMeetingDate('');
+    router.refresh();
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 22, margin: '0 0 24px' }}>Intake</h2>
+
+      <div className="unscheduled-section">
+        <div className="unscheduled-header"><h3>Add item to a meeting</h3></div>
+        <div className="unscheduled-row" style={{ gap: 8 }}>
+          <select style={{ flex: 1 }} value={addItemId} onChange={(e) => setAddItemId(e.target.value)}>
+            <option value="">{eligible.length === 0 ? 'No available items' : `Select an item (${eligible.length} available)...`}</option>
+            {eligible.map((item) => {
+              const themeNames = item.themeLinks
+                .map((l) => themes.find((t) => t.id === l.themeId))
+                .filter(Boolean)
+                .map((t) => t.name)
+                .join(', ');
+              return <option key={item.id} value={item.id}>{item.title}{themeNames ? ` (${themeNames})` : ''}</option>;
+            })}
+          </select>
+          <select style={{ width: 200 }} value={addMeetingDate} onChange={(e) => setAddMeetingDate(e.target.value)}>
+            <option value="">Select a meeting...</option>
+            {upcomingThursdays.map((d) => <option key={d} value={d}>{formatMeetingDateDisplay(d)}</option>)}
+          </select>
+          <button className="btn primary" disabled={!addItemId || !addMeetingDate} onClick={handleAdd}>Add</button>
+        </div>
+      </div>
+
+      {thursdays.map((dateStr) => {
+        const meeting = meetings.find((m) => m.date === dateStr);
+        const meetingDate = new Date(dateStr + 'T00:00:00');
+        const isUpcoming = meetingDate >= today;
+        const hasItems = meeting && meeting.agendaItems.length > 0;
+        if (!isUpcoming && !hasItems) return null;
+        return <MeetingSection key={dateStr} dateStr={dateStr} meeting={meeting} items={items} themes={themes} router={router} present={present} />;
+      })}
+    </div>
+  );
+}
+
+function MeetingSection({ dateStr, meeting, items, themes, router, present }) {
+  const agendaItems = meeting ? meeting.agendaItems : [];
+
+  return (
+    <div className="meeting-section">
+      <div className="meeting-header">
+        <h3>{formatMeetingDateDisplay(dateStr)}</h3>
+        <span className="meeting-date">Product/Business Weekly</span>
+      </div>
+      {agendaItems.length === 0 ? (
+        <div className="meeting-empty">No items scheduled. Use the picker above to add items to this meeting.</div>
+      ) : (
+        agendaItems.map((ai) => {
+          const item = items.find((i) => i.id === ai.itemId);
+          if (!item) return null;
+          return <AgendaRow key={ai.id} agendaItem={ai} item={item} themes={themes} router={router} present={present} />;
+        })
+      )}
+    </div>
+  );
+}
+
+function AgendaRow({ agendaItem, item, themes, router, present }) {
+  const isApplied = agendaItem.applied;
+  const canApply = !isApplied && agendaItem.decision !== 'pending' && agendaItem.signoff && agendaItem.signoff.trim();
+
+  let rowClass = 'agenda-row';
+  if (isApplied && agendaItem.decision === 'next') rowClass += ' decided-next';
+  if (isApplied && agendaItem.decision === 'later') rowClass += ' decided-later';
+
+  const themeNames = item.themeLinks
+    .map((l) => themes.find((t) => t.id === l.themeId))
+    .filter(Boolean);
+
+  return (
+    <div className={rowClass}>
+      <div className="agenda-title">
+        {item.title}
+        {isApplied && <span className="item-link-badge" style={{ color: 'var(--accent-3)', borderColor: 'var(--accent-3)', marginLeft: 8 }}>Applied</span>}
+        {themeNames.map((t) => <span key={t.id} className="item-tag">{t.name}</span>)}
+      </div>
+      <div className="agenda-field">
+        <label>Decision</label>
+        <select
+          disabled={isApplied}
+          value={agendaItem.decision}
+          onChange={async (e) => {
+            await updateMeetingItemDecision(agendaItem.id, e.target.value);
+            router.refresh();
+          }}
+        >
+          <option value="pending">Pending</option>
+          <option value="next">Approved → Next</option>
+          <option value="later">Keep in Later</option>
+        </select>
+      </div>
+      <div className="agenda-field">
+        <label>Signed off by</label>
+        <input
+          type="text"
+          disabled={isApplied}
+          defaultValue={agendaItem.signoff}
+          placeholder="Name"
+          onBlur={async (e) => {
+            const val = e.target.value.trim();
+            if (val !== (agendaItem.signoff || '')) {
+              await updateMeetingItemSignoff(agendaItem.id, val);
+              router.refresh();
+            }
+          }}
+        />
+      </div>
+      <button
+        className="btn primary"
+        disabled={!canApply}
+        style={isApplied ? { opacity: 0.6 } : undefined}
+        onClick={async () => {
+          if (isApplied) return;
+          await applyMeetingItemDecision(agendaItem.id);
+          router.refresh();
+        }}
+      >
+        {isApplied ? 'Applied' : 'Apply'}
+      </button>
+      {!isApplied && !present && (
+        <button
+          className="icon-btn agenda-remove"
+          title="Remove from this meeting"
+          onClick={async () => {
+            await removeItemFromMeeting(agendaItem.id);
+            router.refresh();
+          }}
+        >✕</button>
       )}
     </div>
   );

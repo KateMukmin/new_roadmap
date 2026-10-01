@@ -13,6 +13,7 @@ export default async function Page() {
       initialTitle={data.title}
       initialThemes={data.themes}
       initialItems={data.items}
+      initialMeetings={data.meetings}
     />
   );
 }
