@@ -5,19 +5,20 @@ import { useRouter } from 'next/navigation';
 import {
   addItemToMeeting,
   applyMeetingItemDecision,
+  editMeetingItem,
   createItem,
   createTheme,
   deleteItem,
   deleteTheme,
   importRoadmapData,
   removeItemFromMeeting,
+  updateMeetingItemField,
   renameTheme,
   reorderThemeItems,
   reorderThemes,
   updateItem,
   updateItemIntake,
-  updateMeetingItemDecision,
-  updateMeetingItemSignoff,
+
   updateTitle,
 } from '@/lib/actions';
 import { STATUS_LABEL, getSortedItems, themePosition, dateBucketLabel, parseWhenValue, ACCENT_HEX, UNTAGGED_HEX, ACCENTS, containsUrl, linkifyParts } from '@/lib/roadmapUtils';
@@ -626,7 +627,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
               )}
               {editingItem && editingItem.approvedDate && (
                 <div className="item-approval" style={{ marginTop: 6 }}>
-                  {editingItem.approvedDecision === 'next' ? 'Approved to Next' : 'Kept in Later'} on {formatMeetingDateDisplay(editingItem.approvedDate)} — signed off by {editingItem.approvedBy || 'unknown'}
+                  {editingItem.approvedDecision === 'next' ? 'Approved to Next' : editingItem.approvedDecision === 'remove' ? 'Removed' : 'Kept in Later'} on {formatMeetingDateDisplay(editingItem.approvedDate)} — signed off by {editingItem.approvedBy || 'unknown'}{editingItem.approvedContext ? ` — ${editingItem.approvedContext}` : ''}
                 </div>
               )}
             </div>
@@ -838,7 +839,7 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
         </div>
         {item.approvedDate && (
           <div className="item-approval">
-            {item.approvedDecision === 'next' ? 'Approved to Next' : 'Kept in Later'} on {formatMeetingDateDisplay(item.approvedDate)} — signed off by {item.approvedBy || 'unknown'}
+            {item.approvedDecision === 'next' ? 'Approved to Next' : item.approvedDecision === 'remove' ? 'Removed' : 'Kept in Later'} on {formatMeetingDateDisplay(item.approvedDate)} — signed off by {item.approvedBy || 'unknown'}{item.approvedContext ? ` — ${item.approvedContext}` : ''}
           </div>
         )}
         {item.phases && item.phases.length > 0 && (
@@ -1098,8 +1099,9 @@ function GanttView({ items, themes }) {
   );
 }
 
-const MEETING_WEEKS = 6;
+
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function formatMeetingDateDisplay(dateStr) {
@@ -1107,179 +1109,348 @@ function formatMeetingDateDisplay(dateStr) {
   return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-function getThursdays() {
+function getThursdaysInMonth(year, month) {
   const list = [];
-  const start = new Date(2026, 9, 1); // Oct 1, 2026
+  const d = new Date(year, month, 1);
+  while (d.getDay() !== 4) d.setDate(d.getDate() + 1);
+  while (d.getMonth() === month) {
+    list.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 7);
+  }
+  return list;
+}
+
+function getAllFutureThursdays() {
+  const list = [];
   const today = new Date(); today.setHours(0,0,0,0);
-  const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + MEETING_WEEKS * 7);
-  const cursor = new Date(start);
+  const end = new Date(today.getFullYear() + 3, today.getMonth(), today.getDate());
+  const cursor = new Date(2026, 9, 1);
   while (cursor.getDay() !== 4) cursor.setDate(cursor.getDate() + 1);
-  let guard = 0;
-  while (cursor <= endDate && guard < 100) {
-    list.push(cursor.toISOString().slice(0, 10));
+  while (cursor <= end) {
+    if (cursor >= today) list.push(cursor.toISOString().slice(0, 10));
     cursor.setDate(cursor.getDate() + 7);
-    guard++;
   }
   return list;
 }
 
 function IntakeView({ items, themes, meetings, router, present }) {
-  const [addItemId, setAddItemId] = useState('');
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [activeDateStr, setActiveDateStr] = useState(null);
+  const [stickyItemId, setStickyItemId] = useState('');
   const [addMeetingDate, setAddMeetingDate] = useState('');
+  const [intakeSearch, setIntakeSearch] = useState('');
+  const searchRef = useRef(null);
 
   const scheduledIds = {};
   meetings.forEach((m) => m.agendaItems.forEach((a) => { scheduledIds[a.itemId] = true; }));
-
   const eligible = items
     .filter((i) => (i.status === 'next' || i.status === 'later') && !scheduledIds[i.id])
-    .sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'next' ? -1 : 1;
-      return a.title.localeCompare(b.title);
-    });
+    .sort((a, b) => { if (a.status !== b.status) return a.status === 'next' ? -1 : 1; return a.title.localeCompare(b.title); });
 
-  const thursdays = getThursdays();
+  const thursdays = getThursdaysInMonth(calYear, calMonth);
   const today = new Date(); today.setHours(0,0,0,0);
-  const upcomingThursdays = thursdays.filter((d) => new Date(d + 'T00:00:00') >= today);
+  const todayStr = today.toISOString().slice(0, 10);
+  const futureThursdays = getAllFutureThursdays();
+
+  // Default to nearest upcoming Thursday in the current month
+  const effectiveDate = activeDateStr && thursdays.includes(activeDateStr)
+    ? activeDateStr
+    : thursdays.find((d) => d >= todayStr) || thursdays[0] || null;
+
+  const selectedMeeting = effectiveDate ? meetings.find((m) => m.date === effectiveDate) : null;
 
   async function handleAdd() {
-    if (!addItemId || !addMeetingDate) return;
-    await addItemToMeeting(addMeetingDate, addItemId);
-    setAddItemId('');
+    if (!stickyItemId || !addMeetingDate) return;
+    await addItemToMeeting(addMeetingDate, stickyItemId);
+    setStickyItemId('');
     setAddMeetingDate('');
     router.refresh();
   }
 
+  function prevMonth() { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else { setCalMonth(calMonth - 1); } setActiveDateStr(null); }
+  function nextMonth() { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else { setCalMonth(calMonth + 1); } setActiveDateStr(null); }
+
+  // Search results
+  const searchResults = [];
+  if (intakeSearch.trim()) {
+    const q = intakeSearch.trim().toLowerCase();
+    meetings.forEach((m) => {
+      m.agendaItems.forEach((ai) => {
+        const item = items.find((i) => i.id === ai.itemId);
+        const title = item ? item.title : '(Removed item)';
+        const searchable = [title, ai.signoff, ai.decision, ai.context, formatMeetingDateDisplay(m.date)].join(' ').toLowerCase();
+        if (searchable.includes(q)) searchResults.push({ item, ai, meeting: m, title });
+      });
+    });
+    // Also check items with approval stamps not in meetings
+    items.forEach((item) => {
+      if (!item.approvedDate) return;
+      const searchable = [item.title, item.approvedBy, item.approvedDecision, item.approvedContext, formatMeetingDateDisplay(item.approvedDate)].join(' ').toLowerCase();
+      if (!searchable.includes(q)) return;
+      if (searchResults.some((r) => r.item && r.item.id === item.id)) return;
+      searchResults.push({ item, ai: null, meeting: null, title: item.title });
+    });
+  }
+
   return (
     <div>
-      <h2 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 22, margin: '0 0 24px' }}>Intake</h2>
+      <h2 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 22, margin: '0 0 20px' }}>Intake</h2>
 
+      {/* Add item picker */}
       <div className="unscheduled-section">
         <div className="unscheduled-header"><h3>Add item to a meeting</h3></div>
         <div className="unscheduled-row" style={{ gap: 8 }}>
-          <select style={{ flex: 1 }} value={addItemId} onChange={(e) => setAddItemId(e.target.value)}>
+          <select style={{ flex: 1 }} value={stickyItemId} onChange={(e) => setStickyItemId(e.target.value)}>
             <option value="">{eligible.length === 0 ? 'No available items' : `Select an item (${eligible.length} available)...`}</option>
             {eligible.map((item) => {
-              const themeNames = item.themeLinks
-                .map((l) => themes.find((t) => t.id === l.themeId))
-                .filter(Boolean)
-                .map((t) => t.name)
-                .join(', ');
+              const themeNames = item.themeLinks.map((l) => themes.find((t) => t.id === l.themeId)).filter(Boolean).map((t) => t.name).join(', ');
               return <option key={item.id} value={item.id}>[{item.status === 'next' ? 'Next' : 'Later'}] {item.title}{themeNames ? ` (${themeNames})` : ''}</option>;
             })}
           </select>
           <select style={{ width: 200 }} value={addMeetingDate} onChange={(e) => setAddMeetingDate(e.target.value)}>
             <option value="">Select a meeting...</option>
-            {upcomingThursdays.map((d) => <option key={d} value={d}>{formatMeetingDateDisplay(d)}</option>)}
+            {futureThursdays.map((d) => <option key={d} value={d}>{formatMeetingDateDisplay(d)}</option>)}
           </select>
-          <button className="btn primary" disabled={!addItemId || !addMeetingDate} onClick={handleAdd}>Add</button>
+          <button className="btn primary" disabled={!stickyItemId || !addMeetingDate} onClick={handleAdd}>Add</button>
         </div>
       </div>
 
-      {thursdays.map((dateStr) => {
-        const meeting = meetings.find((m) => m.date === dateStr);
-        const meetingDate = new Date(dateStr + 'T00:00:00');
-        const isUpcoming = meetingDate >= today;
-        const hasItems = meeting && meeting.agendaItems.length > 0;
-        if (!isUpcoming && !hasItems) return null;
-        return <MeetingSection key={dateStr} dateStr={dateStr} meeting={meeting} items={items} themes={themes} router={router} present={present} />;
-      })}
+      {/* Intake search */}
+      <div className="search-bar" style={{ marginBottom: 20 }}>
+        <input
+          ref={searchRef}
+          className="search-input"
+          placeholder="Search intake history (items, decisions, names)..."
+          value={intakeSearch}
+          onChange={(e) => setIntakeSearch(e.target.value)}
+        />
+        {intakeSearch && <button className="btn ghost" onClick={() => setIntakeSearch('')}>Clear</button>}
+      </div>
+
+      {intakeSearch.trim() ? (
+        <div className="theme-block">
+          <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
+            <h2>Search results</h2>
+            <span className="count">{searchResults.length} match{searchResults.length === 1 ? '' : 'es'}</span>
+          </div>
+          {searchResults.length === 0 ? (
+            <div className="meeting-empty">No matches found.</div>
+          ) : searchResults.map((r, i) => (
+            <IntakeSearchResult key={i} r={r} themes={themes} />
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Month calendar */}
+          <div className="meeting-cal">
+            <div className="meeting-cal-nav">
+              <button className="icon-btn" onClick={prevMonth}>←</button>
+              <span className="cal-label">{MONTHS[calMonth]} {calYear}</span>
+              <button className="icon-btn" onClick={nextMonth}>→</button>
+            </div>
+            <div className="meeting-dates">
+              {thursdays.map((dateStr) => {
+                const md = new Date(dateStr + 'T00:00:00');
+                const isPast = md < today;
+                const isToday = dateStr === todayStr;
+                const isActive = dateStr === effectiveDate;
+                const mtg = meetings.find((m) => m.date === dateStr);
+                const count = mtg ? mtg.agendaItems.length : 0;
+                let cls = 'meeting-date-btn';
+                if (isPast) cls += ' past';
+                if (isToday) cls += ' today';
+                if (isActive) cls += ' active';
+                if (count > 0 && !isActive) cls += ' has-items';
+                return (
+                  <button key={dateStr} className={cls} onClick={() => setActiveDateStr(dateStr)}>
+                    <span className="btn-date">{MONTHS_SHORT[md.getMonth()]} {md.getDate()}</span>
+                    {count > 0 && <span className="btn-count">{count} item{count === 1 ? '' : 's'}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {effectiveDate && (
+            <MeetingSection dateStr={effectiveDate} meeting={selectedMeeting} items={items} themes={themes} router={router} present={present} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function IntakeSearchResult({ r, themes }) {
+  const decisionLabel = (d) => d === 'next' ? 'Approved to Next' : d === 'later' ? 'Kept in Later' : d === 'remove' ? 'Removed' : d;
+  let cls = 'agenda-row';
+  if (r.ai?.applied && r.ai.decision === 'next') cls += ' decided-next';
+  if (r.ai?.applied && r.ai.decision === 'later') cls += ' decided-later';
+  if (r.ai?.applied && r.ai.decision === 'remove') cls += ' decided-remove';
+
+  const history = r.ai?.history || [];
+
+  return (
+    <div className={cls}>
+      <div className="agenda-title">
+        {r.title}
+        {r.item && r.item.themeLinks.map((l) => {
+          const t = themes.find((x) => x.id === l.themeId);
+          return t ? <span key={t.id} className="item-tag">{t.name}</span> : null;
+        })}
+        <div className="intake-result-meeting">{r.meeting ? formatMeetingDateDisplay(r.meeting.date) : r.item?.approvedDate ? formatMeetingDateDisplay(r.item.approvedDate) : ''}</div>
+        {r.ai ? (
+          r.ai.applied
+            ? <div className="intake-result-decision applied">{decisionLabel(r.ai.decision)}{r.ai.signoff ? ` — ${r.ai.signoff}` : ''}{r.ai.context ? ` — ${r.ai.context}` : ''}</div>
+            : <div className="intake-result-decision pending">Pending{r.ai.context ? ` — ${r.ai.context}` : ''}</div>
+        ) : r.item?.approvedDecision ? (
+          <div className="intake-result-decision applied">{decisionLabel(r.item.approvedDecision)}{r.item.approvedBy ? ` — ${r.item.approvedBy}` : ''}{r.item.approvedContext ? ` — ${r.item.approvedContext}` : ''}</div>
+        ) : null}
+        {history.map((h, i) => {
+          const d = new Date(h.appliedAt);
+          return <div key={i} style={{ fontSize: 11, color: 'var(--muted)' }}>{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} — {decisionLabel(h.decision)}{h.signoff ? ` — ${h.signoff}` : ''}{h.context ? ` — ${h.context}` : ''}</div>;
+        })}
+      </div>
     </div>
   );
 }
 
 function MeetingSection({ dateStr, meeting, items, themes, router, present }) {
   const agendaItems = meeting ? meeting.agendaItems : [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const md = new Date(dateStr + 'T00:00:00');
+  const isPast = md < today;
+  const isToday = md.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
 
   return (
     <div className="meeting-section">
-      <div className="meeting-header">
-        <h3>{formatMeetingDateDisplay(dateStr)}</h3>
-        <span className="meeting-date">Product/Business Weekly</span>
+      <div className="meeting-header" style={isPast ? { opacity: 0.65 } : undefined}>
+        <h3>{formatMeetingDateDisplay(dateStr)}{isToday ? '  (Today)' : ''}</h3>
+        <span className="meeting-date">{isPast ? 'Product/Business Weekly — Past' : 'Product/Business Weekly'}</span>
       </div>
       {agendaItems.length === 0 ? (
         <div className="meeting-empty">No items scheduled. Use the picker above to add items to this meeting.</div>
-      ) : (
-        agendaItems.map((ai) => {
-          const item = items.find((i) => i.id === ai.itemId);
-          if (!item) return null;
-          return <AgendaRow key={ai.id} agendaItem={ai} item={item} themes={themes} router={router} present={present} />;
-        })
-      )}
+      ) : agendaItems.map((ai) => {
+        const item = items.find((i) => i.id === ai.itemId);
+        if (!item) return null;
+        return <AgendaRow key={ai.id} agendaItem={ai} dateStr={dateStr} item={item} themes={themes} router={router} present={present} />;
+      })}
     </div>
   );
 }
 
-function AgendaRow({ agendaItem, item, themes, router, present }) {
+function AgendaRow({ agendaItem, dateStr, item, themes, router, present }) {
   const isApplied = agendaItem.applied;
-  const canApply = !isApplied && agendaItem.decision !== 'pending' && agendaItem.signoff && agendaItem.signoff.trim();
+  const [editing, setEditing] = useState(false);
+  const isLocked = isApplied && !editing;
+
+  const [decision, setDecision] = useState(agendaItem.decision);
+  const [signoff, setSignoff] = useState(agendaItem.signoff || '');
+  const [context, setContext] = useState(agendaItem.context || '');
+
+  const canApply = decision !== 'pending' && signoff.trim();
 
   let rowClass = 'agenda-row';
   if (isApplied && agendaItem.decision === 'next') rowClass += ' decided-next';
   if (isApplied && agendaItem.decision === 'later') rowClass += ' decided-later';
+  if (isApplied && agendaItem.decision === 'remove') rowClass += ' decided-remove';
 
-  const themeNames = item.themeLinks
-    .map((l) => themes.find((t) => t.id === l.themeId))
-    .filter(Boolean);
+  const themeNames = item.themeLinks.map((l) => themes.find((t) => t.id === l.themeId)).filter(Boolean);
+  const history = agendaItem.history || [];
+
+  const decisionLabel = (d) => d === 'next' ? 'Approved to Next' : d === 'later' ? 'Kept in Later' : d === 'remove' ? 'Removed' : d;
 
   return (
     <div className={rowClass}>
       <div className="agenda-title">
         {item.title}
-        {isApplied && <span className="item-link-badge" style={{ color: 'var(--accent-3)', borderColor: 'var(--accent-3)', marginLeft: 8 }}>Applied</span>}
+        {isApplied && !editing && <span className="item-link-badge" style={{ color: 'var(--accent-3)', borderColor: 'var(--accent-3)', marginLeft: 8 }}>Applied</span>}
         {themeNames.map((t) => <span key={t.id} className="item-tag">{t.name}</span>)}
       </div>
+
       <div className="agenda-field">
         <label>Decision</label>
-        <select
-          disabled={isApplied}
-          value={agendaItem.decision}
-          onChange={async (e) => {
-            await updateMeetingItemDecision(agendaItem.id, e.target.value);
-            router.refresh();
-          }}
-        >
+        <select disabled={isLocked} value={decision} onChange={async (e) => {
+          setDecision(e.target.value);
+          await updateMeetingItemField(agendaItem.id, 'decision', e.target.value);
+        }}>
           <option value="pending">Pending</option>
           <option value="next">Approved → Next</option>
           <option value="later">Keep in Later</option>
+          <option value="remove">Remove</option>
         </select>
       </div>
+
       <div className="agenda-field">
         <label>Signed off by</label>
         <input
           type="text"
-          disabled={isApplied}
-          defaultValue={agendaItem.signoff}
+          disabled={isLocked}
+          value={signoff}
           placeholder="Name"
+          onChange={(e) => setSignoff(e.target.value)}
           onBlur={async (e) => {
             const val = e.target.value.trim();
-            if (val !== (agendaItem.signoff || '')) {
-              await updateMeetingItemSignoff(agendaItem.id, val);
-              router.refresh();
-            }
+            setSignoff(val);
+            await updateMeetingItemField(agendaItem.id, 'signoff', val);
           }}
         />
       </div>
-      <button
-        className="btn primary"
-        disabled={!canApply}
-        style={isApplied ? { opacity: 0.6 } : undefined}
+
+      <div className="agenda-field" style={{ flexBasis: '100%' }}>
+        <label>Context</label>
+        <input
+          type="text"
+          style={{ width: '100%' }}
+          disabled={isLocked}
+          value={context}
+          placeholder="Decision context or notes"
+          onChange={(e) => setContext(e.target.value)}
+          onBlur={async (e) => {
+            const val = e.target.value.trim();
+            setContext(val);
+            await updateMeetingItemField(agendaItem.id, 'context', val);
+          }}
+        />
+      </div>
+
+      {history.length > 0 && (
+        <div style={{ flexBasis: '100%', padding: '4px 0 0' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>History</div>
+          {history.map((h, i) => {
+            const d = new Date(h.appliedAt);
+            return <div key={i} style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+              {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} — {decisionLabel(h.decision)}{h.signoff ? ` — ${h.signoff}` : ''}{h.context ? ` — ${h.context}` : ''}
+            </div>;
+          })}
+        </div>
+      )}
+
+      {decision === 'remove' && !isApplied && (
+        <div style={{ fontSize: 12, color: 'var(--accent-2)', flexBasis: '100%', padding: '4px 0 0' }}>
+          Applying Remove will permanently delete this item from the roadmap.
+        </div>
+      )}
+
+      <button className="btn primary" disabled={isLocked || !canApply} style={isLocked ? { opacity: 0.6 } : undefined}
         onClick={async () => {
-          if (isApplied) return;
           await applyMeetingItemDecision(agendaItem.id);
+          setEditing(false);
           router.refresh();
         }}
-      >
-        {isApplied ? 'Applied' : 'Apply'}
-      </button>
+      >{isApplied && !editing ? 'Applied' : 'Apply'}</button>
+
+      {isApplied && !editing && (
+        <button className="btn" onClick={async () => {
+          await editMeetingItem(agendaItem.id);
+          setEditing(true);
+          router.refresh();
+        }}>Edit</button>
+      )}
+
       {!isApplied && !present && (
-        <button
-          className="icon-btn agenda-remove"
-          title="Remove from this meeting"
-          onClick={async () => {
-            await removeItemFromMeeting(agendaItem.id);
-            router.refresh();
-          }}
+        <button className="icon-btn agenda-remove" title="Remove from this meeting"
+          onClick={async () => { await removeItemFromMeeting(agendaItem.id); router.refresh(); }}
         >✕</button>
       )}
     </div>

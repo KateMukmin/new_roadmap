@@ -40,6 +40,7 @@ model Item {
   approvedDate     String?
   approvedBy       String?
   approvedDecision String?
+  approvedContext  String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   themes           ThemeItem[]
@@ -90,7 +91,9 @@ model MeetingItem {
   itemId    String
   decision  String  @default("pending")
   signoff   String?
+  context   String?
   applied   Boolean @default(false)
+  history   String? // JSON array of past decisions
 
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   item    Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
