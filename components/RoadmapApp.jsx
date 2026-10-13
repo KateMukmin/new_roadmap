@@ -208,8 +208,8 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
     router.refresh();
   }
 
-  async function handleToggleIntake(item) {
-    await updateItemIntake(item.id, !item.intake);
+  async function handleAddToMeetingFromCard(itemId, meetingDate) {
+    await addItemToMeeting(meetingDate, itemId);
     router.refresh();
   }
 
@@ -438,7 +438,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
                 items={withOtherThemeNames(getSortedItems(displayItems.filter(matchesSearch), sortMode), null)}
                 present={present}
                 onEditItem={openEditItemModal}
-                onToggleIntake={handleToggleIntake}
+                meetings={meetings} onAddToMeeting={handleAddToMeetingFromCard}
               />
             ) : (
               <>
@@ -466,7 +466,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
                     items={withOtherThemeNames(getSortedItems(displayItems, sortMode), null)}
                     present={present}
                     onEditItem={openEditItemModal}
-                onToggleIntake={handleToggleIntake}
+                meetings={meetings} onAddToMeeting={handleAddToMeetingFromCard}
                   />
                 )}
 
@@ -509,9 +509,9 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
                         onDelete={() => handleDeleteTheme(activeTheme)}
                         onAddItem={() => openAddItemModal(activeTheme.id)}
                         onEditItem={openEditItemModal}
-                onToggleIntake={handleToggleIntake}
+                meetings={meetings} onAddToMeeting={handleAddToMeetingFromCard}
                         onMoveItem={(itemId, dir) => moveItem(activeTheme.id, itemId, dir)}
-                        onToggleIntake={handleToggleIntake}
+                        meetings={meetings} onAddToMeeting={handleAddToMeetingFromCard}
                   />
                 ) : null}
               </>
@@ -720,7 +720,7 @@ export default function RoadmapApp({ initialTitle, initialThemes, initialItems, 
   );
 }
 
-function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, onCommitRename, onDelete, onAddItem, onEditItem, onMoveItem, onToggleIntake }) {
+function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, onCommitRename, onDelete, onAddItem, onEditItem, onMoveItem, meetings, onAddToMeeting }) {
   const accentVar = `var(--${theme.color})`;
   const tintVar = `var(--${theme.color}-tint)`;
 
@@ -755,7 +755,8 @@ function ThemeBlock({ theme, items, present, sortMode, editing, onStartRename, o
           showTagsExcept={theme.id}
           present={present}
           onEdit={() => onEditItem(item)}
-          onToggleIntake={onToggleIntake}
+          meetings={meetings}
+          onAddToMeeting={onAddToMeeting}
           reorder={
             sortMode === 'status'
               ? {
@@ -794,7 +795,7 @@ function CountLabel({ items }) {
   );
 }
 
-function AllItemsBlock({ items, present, onEditItem, onToggleIntake, title = 'All features', emptyMessage = 'Add some items first.' }) {
+function AllItemsBlock({ items, present, onEditItem, meetings, onAddToMeeting, title = 'All features', emptyMessage = 'Add some items first.' }) {
   return (
     <div className="theme-block">
       <div className="theme-head" style={{ borderLeftColor: 'var(--border-strong)' }}>
@@ -805,7 +806,7 @@ function AllItemsBlock({ items, present, onEditItem, onToggleIntake, title = 'Al
         <div className="empty-state"><h2>Nothing here</h2><p>{emptyMessage}</p></div>
       ) : (
         items.map((item) => (
-          <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} onToggleIntake={onToggleIntake} reorder={null} />
+          <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={present} onEdit={() => onEditItem(item)} meetings={meetings} onAddToMeeting={onAddToMeeting} reorder={null} />
         ))
       )}
     </div>
@@ -820,13 +821,27 @@ function UntaggedBlock({ items, onEdit }) {
         <span className="count"><CountLabel items={items} /></span>
       </div>
       {items.map((item) => (
-        <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} onToggleIntake={null} reorder={null} />
+        <ItemRow key={item.id} item={item} accentVar="var(--muted)" tintVar="var(--border)" showTagsExcept={null} present={false} onEdit={() => onEdit(item)} meetings={null} onAddToMeeting={null} reorder={null} />
       ))}
     </div>
   );
 }
 
-function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, reorder, onToggleIntake }) {
+function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, reorder, meetings, onAddToMeeting }) {
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const intakeRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!intakeOpen) return;
+    function close(e) { if (intakeRef.current && !intakeRef.current.contains(e.target)) setIntakeOpen(false); }
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [intakeOpen]);
+
+  // Check if this item is already scheduled to any meeting
+  const scheduledTo = meetings ? meetings.filter((m) => m.agendaItems.some((a) => a.itemId === item.id)).map((m) => m.date) : [];
+  const isScheduled = scheduledTo.length > 0;
   return (
     <div className="item" style={{ '--accent': accentVar, '--accent-tint': tintVar }}>
       <span className={`pill ${item.status}`}>{STATUS_LABEL[item.status] || 'Now'}</span>
@@ -869,12 +884,36 @@ function ItemRow({ item, accentVar, tintVar, showTagsExcept, present, onEdit, re
               <button className="icon-btn" disabled={reorder.isLast} onClick={reorder.onDown} title="Move down">↓</button>
             </>
           )}
-          {item.status !== 'now' && onToggleIntake && (
-            <button
-              className={`icon-btn${item.intake ? ' active-intake' : ''}`}
-              onClick={() => onToggleIntake(item)}
-              title={item.intake ? 'Remove from Intake' : 'Add to Intake'}
-            >★</button>
+          {item.status !== 'now' && onAddToMeeting && meetings && (
+            <div ref={intakeRef} style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                className={`icon-btn${isScheduled ? ' active-intake' : ''}`}
+                onClick={() => setIntakeOpen((o) => !o)}
+                title={isScheduled ? `In Intake: ${scheduledTo.map(formatMeetingDateDisplay).join(', ')}` : 'Add to Intake meeting'}
+              >★</button>
+              {intakeOpen && (
+                <div className="options-menu" style={{ display: 'flex', right: 'auto', left: 0, minWidth: 200 }}>
+                  {getAllFutureThursdays().slice(0, 12).map((d) => {
+                    const already = scheduledTo.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        className="option-row"
+                        style={already ? { opacity: 0.5 } : undefined}
+                        disabled={already}
+                        onClick={async () => {
+                          if (already) return;
+                          await onAddToMeeting(item.id, d);
+                          setIntakeOpen(false);
+                        }}
+                      >
+                        {formatMeetingDateDisplay(d)}{already ? ' ✓' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
           <button className="icon-btn" onClick={onEdit} title="Edit">✎</button>
         </div>
